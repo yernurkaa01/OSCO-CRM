@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>Sign In</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:linear-gradient(135deg,#ff416c,#ff4b2b,#ffcc00);
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+}
+
+.wrapper{
+background:white;
+width:650px;
+border-radius:25px;
+overflow:hidden;
+display:flex;
+}
+
+/* левая часть */
+
+.left{
+width:40%;
+background:#111;
+color:white;
+padding:40px;
+}
+
+.left h2{
+margin-top:0;
+}
+
+.account{
+display:flex;
+align-items:center;
+gap:10px;
+padding:12px;
+margin-top:15px;
+background:#222;
+border-radius:10px;
+cursor:pointer;
+}
+
+.account:hover{
+background:#333;
+}
+
+.account img{
+width:22px;
+}
+
+/* правая часть */
+
+.right{
+flex:1;
+padding:40px;
+text-align:center;
+}
+
+.right h1{
+margin-top:0;
+}
+
+.password{
+display:none;
+margin-top:20px;
+}
+
+input{
+width:100%;
+padding:12px;
+border-radius:10px;
+border:1px solid #ccc;
+margin-top:10px;
+}
+
+.login{
+margin-top:15px;
+background:#ff416c;
+color:white;
+padding:12px;
+border:none;
+border-radius:10px;
+width:100%;
+cursor:pointer;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="wrapper">
+
+<!-- левая часть -->
+
+<div class="left">
+
+<h2>Аккаунты</h2>
+
+<div class="account" onclick="selectAccount('Google')">
+<img src="https://cdn-icons-png.flaticon.com/512/300/300221.png">
+Google
+</div>
+
+<div class="account" onclick="selectAccount('Apple')">
+<img src="https://cdn-icons-png.flaticon.com/512/0/747.png">
+Apple
+</div>
+
+<div class="account" onclick="selectAccount('GitHub')">
+<img src="https://cdn-icons-png.flaticon.com/512/25/25231.png">
+GitHub
+</div>
+
+<div class="account" onclick="selectAccount('Facebook')">
+<img src="https://cdn-icons-png.flaticon.com/512/124/124010.png">
+Facebook
+</div>
+
+</div>
+
+<!-- правая часть -->
+
+<div class="right">
+
+<h1>Войти</h1>
+
+<div id="serviceText">Выберите аккаунт</div>
+
+<div class="password" id="passwordBlock">
+
+<p>Введите пароль</p>
+
+<form onsubmit="login(); return false;">
+
+<input type="password" placeholder="Пароль" required>
+
+<button class="login" type="submit">Продолжить</button>
+
+</form>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+function selectAccount(service){
+
+document.getElementById("serviceText").innerText="Аккаунт: "+service
+
+document.getElementById("passwordBlock").style.display="block"
+
+}
+
+function login(){
+
+window.location.href="success.html"
+
+}
+
+</script>
+
+</body>
+
+</html>

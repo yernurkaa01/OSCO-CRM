@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>OSCO</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:#111;
+}
+
+/* SIDEBAR */
+
+.sidebar{
+width:250px;
+background:#0f0f0f;
+color:white;
+position:fixed;
+left:0;
+top:0;
+height:100vh;
+display:flex;
+flex-direction:column;
+justify-content:space-between;
+padding:20px;
+box-sizing:border-box;
+}
+
+.logo{
+font-size:24px;
+font-weight:bold;
+margin-bottom:20px;
+}
+
+.newchat{
+background:#1f1f1f;
+padding:12px;
+border-radius:10px;
+cursor:pointer;
+text-align:center;
+margin-bottom:15px;
+}
+
+/* CHAT */
+
+#chatList{
+overflow-y:auto;
+}
+
+.chat-item{
+display:flex;
+justify-content:space-between;
+align-items:center;
+background:#1a1a1a;
+padding:10px;
+border-radius:8px;
+margin-bottom:8px;
+font-size:14px;
+cursor:pointer;
+position:relative;
+}
+
+/* THREE DOTS */
+
+.chat-menu{
+display:none;
+cursor:pointer;
+padding:5px;
+}
+
+.chat-item:hover .chat-menu{
+display:block;
+}
+
+/* DROPDOWN */
+
+.dropdown{
+position:absolute;
+right:-150px;
+top:0;
+background:#222;
+border-radius:10px;
+display:none;
+flex-direction:column;
+min-width:140px;
+box-shadow:0 8px 20px rgba(0,0,0,0.4);
+z-index:100;
+}
+
+.dropdown div{
+padding:10px;
+cursor:pointer;
+}
+
+.dropdown div:hover{
+background:#333;
+}
+
+/* USER */
+
+.user{
+display:flex;
+align-items:center;
+gap:10px;
+}
+
+.avatar{
+width:35px;
+height:35px;
+border-radius:50%;
+background:#ff416c;
+display:flex;
+align-items:center;
+justify-content:center;
+font-weight:bold;
+}
+
+/* MAIN */
+
+.main{
+margin-left:250px;
+height:100vh;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+background:linear-gradient(135deg,#ff416c,#ff4b2b,#ffcc00);
+color:white;
+text-align:center;
+overflow-y:auto;
+}
+
+.main h1{
+font-size:40px;
+margin-bottom:20px;
+}
+
+/* INPUT */
+
+.messagebox{
+width:500px;
+background:white;
+padding:10px;
+border-radius:15px;
+display:flex;
+gap:10px;
+}
+
+.messagebox input{
+flex:1;
+border:none;
+outline:none;
+font-size:16px;
+}
+
+.send{
+background:#ff416c;
+color:white;
+border:none;
+padding:10px 20px;
+border-radius:10px;
+cursor:pointer;
+}
+
+/* RESULT */
+
+#result{
+margin-top:40px;
+background:white;
+padding:30px;
+border-radius:15px;
+width:650px;
+color:black;
+display:none;
+text-align:left;
+}
+
+#result img{
+width:100%;
+border-radius:12px;
+margin-top:15px;
+box-shadow:0 10px 25px rgba(0,0,0,0.2);
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="sidebar">
+
+<div>
+
+<div class="logo">OSCO</div>
+
+<div class="newchat">+ Новый чат</div>
+
+<div id="chatList"></div>
+
+</div>
+
+<div class="user">
+
+<div class="avatar" id="avatar">U</div>
+<div id="username">User</div>
+
+</div>
+
+</div>
+
+
+<div class="main">
+
+<h1>Чем помочь в OSCO?</h1>
+
+<div class="messagebox">
+
+<input id="messageInput" placeholder="Сообщение для OSCO">
+
+<button class="send" onclick="sendMessage()">→</button>
+
+</div>
+
+<div id="result"></div>
+
+</div>
+
+<script>
+
+/* MATERIAL */
+
+const materials={
+
+space:`
+
+<h2>Космос</h2>
+
+<p>Космос — пространство за пределами атмосферы Земли.</p>
+
+<h3>Солнечная система</h3>
+
+<img src="https://upload.wikimedia.org/wikipedia/commons/c/c3/Solar_sys8.jpg">
+
+<p>Солнечная система включает:</p>
+
+<ul>
+<li>Солнце</li>
+<li>8 планет</li>
+<li>спутники</li>
+<li>астероиды</li>
+<li>кометы</li>
+</ul>
+
+<p>Земля — третья планета от Солнца.</p>
+
+`
+
+}
+
+/* TOPIC */
+
+function detectTopic(text){
+
+text=text.toLowerCase()
+
+if(
+text.includes("космо")||
+text.includes("cosmo")||
+text.includes("space")||
+text.includes("galaxy")
+){
+return"space"
+}
+
+return"general"
+
+}
+
+/* SEND */
+
+function sendMessage(){
+
+let input=document.getElementById("messageInput")
+
+let text=input.value
+
+if(text==="")return
+
+let topic=detectTopic(text)
+
+createChat(topic)
+
+if(materials[topic]){
+
+let result=document.getElementById("result")
+
+result.innerHTML=materials[topic]
+
+result.style.display="block"
+
+}
+
+input.value=""
+
+}
+
+/* CREATE CHAT */
+
+function createChat(topic){
+
+let name="Новый чат"
+
+if(topic==="space")name="Космос"
+
+let chatList=document.getElementById("chatList")
+
+let chat=document.createElement("div")
+
+chat.className="chat-item"
+
+let title=document.createElement("span")
+
+title.innerText=name
+
+let menu=document.createElement("span")
+
+menu.className="chat-menu"
+
+menu.innerText="⋮"
+
+let dropdown=document.createElement("div")
+
+dropdown.className="dropdown"
+
+let archive=document.createElement("div")
+
+archive.innerText="Архивировать"
+
+let del=document.createElement("div")
+
+del.innerText="Удалить"
+
+archive.onclick=function(){
+
+chat.style.opacity="0.4"
+
+dropdown.style.display="none"
+
+}
+
+del.onclick=function(){
+
+chat.remove()
+
+}
+
+menu.onclick=function(e){
+
+e.stopPropagation()
+
+if(dropdown.style.display==="flex"){
+dropdown.style.display="none"
+}else{
+dropdown.style.display="flex"
+}
+
+}
+
+chat.appendChild(title)
+
+chat.appendChild(menu)
+
+chat.appendChild(dropdown)
+
+dropdown.appendChild(archive)
+
+dropdown.appendChild(del)
+
+chatList.prepend(chat)
+
+}
+
+/* CLOSE MENU */
+
+document.addEventListener("click",function(){
+
+document.querySelectorAll(".dropdown").forEach(menu=>{
+menu.style.display="none"
+})
+
+})
+
+/* USER */
+
+let user=localStorage.getItem("user")
+
+if(user){
+
+let data=JSON.parse(user)
+
+let initials=(data.name[0]+data.surname[0]).toUpperCase()
+
+document.getElementById("avatar").innerText=initials
+
+document.getElementById("username").innerText=data.name+" "+data.surname
+
+}
+
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<meta charset="UTF-8">
+<title>Login</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Arial;
+background:linear-gradient(135deg,#ff416c,#ff4b2b,#ffcc00);
+height:100vh;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+.form-box{
+background:white;
+padding:40px;
+border-radius:20px;
+width:340px;
+}
+
+input{
+width:100%;
+padding:12px;
+margin-bottom:15px;
+border-radius:10px;
+border:1px solid #ccc;
+}
+
+input.error{
+background:#ffd6d6;
+border:1px solid red;
+}
+
+button{
+width:100%;
+padding:12px;
+border:none;
+border-radius:10px;
+background:#ff416c;
+color:white;
+cursor:pointer;
+}
+
+.error-message{
+position:fixed;
+top:30px;
+left:50%;
+transform:translateX(-50%);
+background:#ff4d4d;
+color:white;
+padding:15px 30px;
+border-radius:10px;
+display:none;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="form-box">
+
+<h2>Создать аккаунт</h2>
+
+<input id="name" placeholder="Имя">
+<input id="surname" placeholder="Фамилия">
+<input id="email" placeholder="Gmail">
+<input id="password" type="password" placeholder="Пароль">
+
+<button onclick="createAccount()">Создать аккаунт</button>
+
+</div>
+
+<div class="error-message" id="error">
+Пожалуйста заполните все поля
+</div>
+
+<script>
+
+function createAccount(){
+
+let name=document.getElementById("name")
+let surname=document.getElementById("surname")
+let email=document.getElementById("email")
+let password=document.getElementById("password")
+
+let fields=[name,surname,email,password]
+
+let empty=false
+
+fields.forEach(f=>{
+if(f.value===""){
+f.classList.add("error")
+empty=true
+}else{
+f.classList.remove("error")
+}
+})
+
+if(empty){
+
+let err=document.getElementById("error")
+err.style.display="block"
+
+setTimeout(()=>{
+err.style.display="none"
+},2000)
+
+return
+}
+
+let user={
+name:name.value,
+surname:surname.value
+}
+
+localStorage.setItem("user",JSON.stringify(user))
+
+window.location.href="index.html"
+
+}
+
+/* убираем красный цвет при вводе */
+
+let inputs=document.querySelectorAll("input")
+
+inputs.forEach(input=>{
+
+input.addEventListener("input",function(){
+
+if(this.value!==""){
+this.classList.remove("error")
+}
+
+})
+
+})
+
+</script>
+
+</body>
+</html>
