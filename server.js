@@ -114,7 +114,7 @@ const openai = new OpenAI({
 // MONGODB
 // ============================================================
 
-mongoose.connect("mongodb://127.0.0.1:27017/osco")
+mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         console.log("✅ MongoDB подключен")
     })
@@ -371,18 +371,6 @@ app.get("/logs", checkAuth, ownerOnly, async (req, res) => {
 
 app.use("/clients", checkAuth, clientsRouter)
 
-// ============================================================
-// LOGS
-// ============================================================
-
-app.get("/logs", checkAuth, ownerOnly, async (req, res) => {
-
-    const logs = await Log.find()
-        .sort({ createdAt: -1 })
-
-    res.json(logs)
-
-})
 
 // ============================================================
 // SAVE CLIENT
@@ -523,10 +511,12 @@ app.post("/ai", checkAuth, async (req, res) => {
 // SERVER START
 // ============================================================
 
-app.listen(3000, "0.0.0.0", () => {
+const PORT = process.env.PORT || 3000
+
+app.listen(PORT, "0.0.0.0", () => {
 
     console.log("🚀 OSCO SERVER STARTED")
 
-    console.log("🔐 http://localhost:3000/login")
+    console.log(`🌍 PORT: ${PORT}`)
 
 })
