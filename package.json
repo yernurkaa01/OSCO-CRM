@@ -1,7 +1,7 @@
 {
   "name": "structures",
   "version": "1.0.0",
-  "main": "a.js",
+  "main": "server.js",
   "scripts": {
     "start": "concurrently \"node bot.js\" \"node server.js\""
   },
