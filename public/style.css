@@ -1,0 +1,267 @@
+/* ============================================================
+   style.css — СТИЛИ СТРАНИЦЫ АДМИНИСТРАТОРА
+   Подключается в admin.html через <link rel="stylesheet">
+   ============================================================ */
+
+
+/* --- Базовые стили страницы --- */
+body {
+    font-family: Arial;
+    padding: 20px;
+    margin: 0;
+    background: #f5f5f5;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;        /* Скролл у body скрыт — скроллим внутри колонок */
+}
+
+
+/* --- Двухколоночный макет --- */
+.layout {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+}
+
+.left, .right {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    height: 85vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.left  { width: 65%; }
+
+.right {
+    width: 30%;
+    position: sticky;
+    top: 20px;
+}
+
+/* Скролл появляется при наведении на колонку */
+
+
+/* --- Карточки статистики (сетка 4 штуки) --- */
+.top-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 15px 0;
+}
+
+.stat-card {
+    background: #f1f3f5;
+    padding: 12px;
+    border-radius: 10px;
+    font-weight: bold;
+}
+
+
+/* --- Поле живого поиска --- */
+.search-box {
+    margin: 15px 0;
+}
+
+.search-box input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 15px;
+    box-sizing: border-box;
+}
+
+
+/* --- Таблица заказов --- */
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 25px;
+    background: white;
+    border: 1px solid #bbb;
+}
+
+th, td {
+    border: 1px solid #ccc;
+    padding: 9px 10px;
+    text-align: left;
+    font-size: 15px;
+}
+
+th {
+    background: #eee;
+    font-weight: bold;
+    cursor: pointer;          /* Намекаем что колонка кликабельна (сортировка) */
+}
+
+tr:hover {
+    background: #f8f9fa;
+}
+
+/* Цветовая подсветка строк по статусу */
+.row-confirmed { background: #f4fff6; }
+.row-rejected  { background: #fff5f5; }
+
+
+/* --- Цена --- */
+.price {
+    font-weight: bold;
+    white-space: nowrap;
+}
+
+
+/* --- Бейджи статуса --- */
+.status {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.status-confirmed { background: #d4edda; color: #155724; }
+.status-rejected  { background: #f8d7da; color: #721c24; }
+.status-pending   { background: #fff3cd; color: #856404; }
+
+
+/* --- Кнопки --- */
+.details-btn {
+    background: #343a40;
+    color: white;
+    border: none;
+    padding: 6px 9px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn {
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-right: 5px;
+    color: white;
+    font-weight: bold;
+}
+
+.confirm { background: green; }
+.reject  { background: crimson; }
+
+.filter-btn {
+    background: #007bff;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.clear-link {
+    margin-left: 10px;
+    text-decoration: none;
+    color: #007bff;
+}
+
+
+/* --- Карточка ожидающего заказа (правая колонка) --- */
+.order-card {
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 15px;
+    margin-bottom: 15px;
+    background: #fff7d6;
+}
+
+.order-card h3 {
+    margin-top: 0;
+}
+
+
+/* --- Модальное окно деталей заказа --- */
+.modal {
+    display: none;                    /* Скрыто по умолчанию, JS меняет на "block" */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.45); /* Полупрозрачный тёмный оверлей */
+}
+
+.modal-content {
+    background: white;
+    width: 420px;
+    max-width: 90%;
+    margin: 80px auto;
+    padding: 20px;
+    border-radius: 12px;
+}
+
+.close-btn {
+    float: right;
+    cursor: pointer;
+    font-size: 22px;
+    font-weight: bold;
+}
+
+
+/* ============================================================
+   ДОПОЛНЕНИЕ: стили для страницы клиентов
+   ============================================================ */
+
+/* --- Навигация сверху --- */
+.nav {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    background: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+}
+
+.nav-link {
+    text-decoration: none;
+    color: #555;
+    font-weight: bold;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+.nav-link:hover { background: #f1f3f5; }
+.nav-link.active { background: #343a40; color: white; }
+
+/* --- Строка клиента: подсветка при клике --- */
+.client-row {
+    cursor: pointer;
+}
+
+.client-row:hover { background: #f0f4ff !important; }
+.selected-row     { background: #e8f0fe !important; }
+
+/* --- Карточки итогов клиента --- */
+.client-summary {
+    margin: 15px 0;
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.summary-card {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 12px;
+    font-size: 13px;
+    color: #555;
+    line-height: 1.8;
+}
+
+.summary-card b {
+    font-size: 16px;
+    color: #222;
+    display: block;
+}

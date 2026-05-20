@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<!-- ============================================================
+     views/admin.html — РАЗМЕТКА СТРАНИЦЫ АДМИНИСТРАТОРА
+     CSS: /public/style.css
+     JS:  /public/admin.js
+     ============================================================ -->
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>OSCO Admin</title>
+
+    <!-- style.css лежит в /public, Express отдаёт его как статику -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- ================================================
+         ОСНОВНОЙ МАКЕТ: две колонки
+         ================================================ -->
+    <!-- Навигация -->
+<div class="nav">
+
+    <a class="nav-link active" id="linkOrders" href="/admin">
+        📦 Заказы
+    </a>
+
+    <a class="nav-link" id="linkClients" href="/admin/clients">
+        👥 Клиенты
+    </a>
+
+    <a class="nav-link" id="linkHistory" href="/admin/history">
+        📜 История действий
+    </a>
+
+</div>
+
+    <div class="layout">
+
+        <!-- Левая колонка: фильтр + статистика + таблица заказов -->
+        <div class="left">
+            <h2>📦 Заказы</h2>
+
+            <!-- Форма фильтрации по дате -->
+            <form method="GET" action="/admin">
+                <!-- Скрытое поле ключа — заполняется через JS из URL -->
+                <input type="hidden" id="adminKeyInput" name="key" value="">
+                <input type="date" id="dateInput" name="date">
+                <button class="filter-btn" type="submit">Фильтр</button>
+                <a class="clear-link" id="clearLink" href="#">Показать все</a>
+            </form>
+
+            <!-- Карточки статистики — заполняются через JS (updateStats) -->
+            <div class="top-stats">
+                <div class="stat-card" id="stat-total">Всего: 0</div>
+                <div class="stat-card" id="stat-confirmed">Подтверждено: 0</div>
+                <div class="stat-card" id="stat-rejected">Отклонено: 0</div>
+                <div class="stat-card" id="stat-sum">Сумма: 0 ₸</div>
+            </div>
+
+            <!-- Поле живого поиска -->
+            <div class="search-box">
+                <input id="searchInput" type="text" placeholder="Поиск по коду, товару, имени, статусу...">
+            </div>
+
+            <!-- Сюда JS вставляет таблицы заказов (renderOrders) -->
+            <div id="orders-container"></div>
+        </div>
+
+
+        <!-- Правая колонка: заказы в статусе "ожидание" -->
+        <div class="right">
+            <h2>🔔 Новые заказы</h2>
+
+            <!-- Сюда JS вставляет карточки ожидающих заказов -->
+            <div id="pending-container"></div>
+        </div>
+
+    </div>
+
+
+    <!-- ================================================
+         МОДАЛЬНОЕ ОКНО: детали заказа
+         ================================================ -->
+    <div class="modal" id="detailsModal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeDetails()">×</span>
+            <h2>Детали заказа</h2>
+            <div id="detailsContent"></div>
+        </div>
+    </div>
+
+
+    <!-- admin.js лежит в /public, Express отдаёт его как статику -->
+    <script src="admin.js"></script>
+
+</body>
+</html>

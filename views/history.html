@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+
+    <meta charset="UTF-8" />
+
+    <title>История действий</title>
+
+    <link rel="stylesheet" href="/style.css" />
+
+</head>
+
+<body>
+
+    <div class="nav">
+
+        <a class="nav-link" href="/admin">
+            📦 Заказы
+        </a>
+
+        <a class="nav-link" href="/admin/clients">
+            👥 Клиенты
+        </a>
+
+        <a class="nav-link active" href="/admin/history">
+            📜 История действий
+        </a>
+
+    </div>
+
+
+    <div class="left" style="width:95%;margin:auto;">
+
+        <h1>📜 История действий</h1>
+
+        <table>
+
+            <thead>
+
+                <tr>
+                    <th>Сотрудник</th>
+                    <th>Действие</th>
+                    <th>ID заказа</th>
+                    <th>Время</th>
+                </tr>
+
+            </thead>
+
+            <tbody id="historyTable"></tbody>
+
+        </table>
+
+    </div>
+
+
+    <script>
+
+        async function loadHistory() {
+
+            const res = await fetch("/logs")
+
+            const logs = await res.json()
+
+            const table = document.getElementById("historyTable")
+
+            table.innerHTML = ""
+
+            logs.forEach(log => {
+
+                const tr = document.createElement("tr")
+
+                tr.innerHTML = `
+                    <td>${log.user}</td>
+                    <td>${log.action}</td>
+                    <td>${log.orderId}</td>
+                    <td>
+                        ${new Date(log.createdAt).toLocaleString()}
+                    </td>
+                `
+
+                table.appendChild(tr)
+
+            })
+
+        }
+
+        loadHistory()
+
+    </script>
+
+</body>
+</html>

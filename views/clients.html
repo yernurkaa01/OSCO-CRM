@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>OSCO — Клиенты</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <!-- Навигация -->
+    <div class="nav">
+        <a class="nav-link" id="linkOrders" href="#">📦 Заказы</a>
+        <a class="nav-link active" id="linkClients" href="#">👥 Клиенты</a>
+        <a class="nav-link" href="/admin/history">📜 История действий</a>
+    </div>
+
+    <div class="layout">
+
+        <!-- Левая колонка: список клиентов -->
+        <div class="left">
+            <h2>👥 База клиентов</h2>
+
+            <div class="search-box">
+                <input id="clientSearch" type="text" placeholder="Поиск по имени, телефону...">
+            </div>
+
+            <div class="top-stats">
+                <div class="stat-card" id="stat-clients">Клиентов: 0</div>
+                <div class="stat-card" id="stat-orders">Заказов: 0</div>
+                <div class="stat-card" id="stat-revenue">Оборот: 0 ₸</div>
+            </div>
+
+            <div id="clients-container"></div>
+        </div>
+
+        <!-- Правая колонка: заказы выбранного клиента -->
+        <div class="right">
+            <div id="client-detail-empty">
+                <p style="color:#aaa; margin-top:60px; text-align:center; font-size:15px;">
+                    ← Выберите клиента<br>чтобы увидеть его заказы
+                </p>
+            </div>
+            <div id="client-detail-content" style="display:none">
+                <h3 id="detail-name" style="margin-top:0"></h3>
+                <p id="detail-phone" style="color:#888; margin-top:-10px"></p>
+                <div id="detail-summary"></div>
+                <div id="detail-orders"></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="/clients.js"></script>
+</body>
+</html>
