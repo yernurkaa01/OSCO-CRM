@@ -1,9 +1,10 @@
 {
   "name": "structures",
   "version": "1.0.0",
+  "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "concurrently \"node bot.js\" \"node server.js\""
+    "start": "concurrently \"node bot.cjs\" \"node server.js\""
   },
   "dependencies": {
     "axios": "^1.15.0",

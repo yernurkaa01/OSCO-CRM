@@ -3,7 +3,7 @@ const { Telegraf, Markup } = require("telegraf")
 const mongoose = require("mongoose")
 const Order = require("./models/Order")
 
-mongoose.connect("mongodb://127.0.0.1:27017/osco")
+mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("MongoDB подключен"))
     .catch(err => console.log(err))
 
@@ -377,7 +377,7 @@ bot.action(/reject_(.+)_(.+)/, async (ctx) => {
 
         await ctx.editMessageCaption(
             ctx.callbackQuery.message.caption + "\n\n❌ ОПЛАТА ОТКЛОНЕНА",
-            { reply_markup: { inline_keyboard: [] } }
+            { reply_markup: { inliчne_keyboard: [] } }
         )
 
         await ctx.answerCbQuery("Отклонено")
