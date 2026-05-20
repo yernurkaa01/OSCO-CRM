@@ -119,6 +119,7 @@ const openai = new OpenAI({
 // MONGODB
 // ============================================================
 
+console.log("SERVER URI:", process.env.MONGO_URI)
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
         console.log("✅ MongoDB подключен")

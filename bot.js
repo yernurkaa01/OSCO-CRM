@@ -1,8 +1,10 @@
-require("dotenv").config()
-const { Telegraf, Markup } = require("telegraf")
-const mongoose = require("mongoose")
-const Order = require("./models/Order")
+import "dotenv/config"
+import { Telegraf, Markup } from "telegraf"
+import mongoose from "mongoose"
+import Order from "./models/Order.js"
 
+
+console.log("SERVER URI:", process.env.MONGO_URI)
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("MongoDB подключен"))
     .catch(err => console.log(err))

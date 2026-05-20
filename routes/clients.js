@@ -3,9 +3,9 @@
 // Клиенты берутся напрямую из заказов (группировка по phone)
 // ============================================================
 
-const express = require("express")
+import express from "express"
 const router  = express.Router()
-const Order   = require("../models/Order")
+import Order from "../models/Order.js"
 
 
 // GET /clients — группируем заказы по телефону, получаем список клиентов
@@ -75,4 +75,4 @@ router.get("/:key/orders", async (req, res) => {
 })
 
 
-module.exports = router
+export default router

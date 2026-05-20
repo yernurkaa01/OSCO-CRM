@@ -1,16 +1,15 @@
-// ============================================================
-// models/Client.js — МОДЕЛЬ КЛИЕНТА (MongoDB / Mongoose)
-// ============================================================
-
-const mongoose = require("mongoose")
+import mongoose from "mongoose"
 
 const clientSchema = new mongoose.Schema({
-    name:       { type: String },                  // Имя клиента
-    phone:      { type: String, unique: true },    // Телефон — уникальный идентификатор
-    username:   { type: String },                  // Telegram username (@username)
-    telegramId: { type: Number },                  // Telegram ID пользователя
-}, {
-    timestamps: true   // Автоматически добавляет createdAt и updatedAt
+
+    name: String,
+
+    phone: String,
+
+    username: String,
+
+    telegramId: String
+
 })
 
-module.exports = mongoose.model("Client", clientSchema)
+export default mongoose.model("Client", clientSchema)
