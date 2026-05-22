@@ -295,6 +295,38 @@ app.get("/pending-orders", checkAuth, async (req, res) => {
 
 })
 
+// ============================================================
+// RECEIPT PDF
+// ============================================================
+
+app.get("/receipt/:fileId", checkAuth, async (req, res) => {
+
+    try {
+
+        const fileId = req.params.fileId
+
+        const telegramFile = await fetch(
+            `https://api.telegram.org/bot${process.env.BOT_TOKEN}/getFile?file_id=${fileId}`
+        )
+
+        const data = await telegramFile.json()
+
+        const filePath = data.result.file_path
+
+        const fileUrl =
+            `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${filePath}`
+
+        res.redirect(fileUrl)
+
+    } catch (err) {
+
+        console.log(err)
+
+        res.status(500).send("Ошибка открытия PDF")
+
+    }
+
+})
 
 // ============================================================
 // CONFIRM ORDER
@@ -305,7 +337,7 @@ app.post("/confirm-order/:id", checkAuth, async (req, res) => {
     await Order.findByIdAndUpdate(
         req.params.id,
         {
-            status: "подтверждено"
+            status: "оплачено"
         }
     )
 
