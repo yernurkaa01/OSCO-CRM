@@ -235,8 +235,13 @@ async function loadPendingOrders() {
                 <p><b>Имя:</b> ${o.name || "-"}</p>
                 <p><b>Время:</b> ${new Date(o.createdAt).toLocaleTimeString()}</p>
                 <p><b>Статус:</b> <span class="status status-pending">ожидание</span></p>
-                <p><a href="/receipt/${o.receiptFileId}" target="_blank">📄 PDF чек</a></p>
-
+                ${o.receiptFileId ? `
+<p>
+    <a href="/receipt/${o.receiptFileId}" target="_blank">
+        📄 PDF чек
+    </a>
+</p>
+` : ""}
                 <button class="btn confirm" onclick="confirmOrder('${o._id}')">Оплачено</button>
                 <button class="btn reject"  onclick="rejectOrder('${o._id}')">Отклонить</button>
                 <button class="details-btn" onclick='showDetails(${JSON.stringify(o)})'>Подробнее</button>

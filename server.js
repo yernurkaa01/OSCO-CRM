@@ -311,6 +311,7 @@ app.get("/receipt/:fileId", checkAuth, async (req, res) => {
         )
 
         const data = await telegramFile.json()
+        console.log(data)
 
         const filePath = data.result.file_path
 
