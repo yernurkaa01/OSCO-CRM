@@ -10,6 +10,7 @@ import cors from "cors"
 import path from "path"
 import session from "express-session"
 import OpenAI from "openai"
+import fetch from "node-fetch"
 import { fileURLToPath } from "url"
 
 import Order from "./models/Order.js"
