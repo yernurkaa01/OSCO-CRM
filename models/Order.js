@@ -16,7 +16,7 @@ const orderSchema = new mongoose.Schema({
     telegramId: Number,
 
     totalPrice: Number,
-    receipt: String,
+    receiptFileId: String,
 
     status: {
         type: String,
