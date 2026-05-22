@@ -336,6 +336,37 @@ app.get("/receipt/:fileId", checkAuth, async (req, res) => {
 
 app.post("/confirm-order/:id", checkAuth, async (req, res) => {
 
+    const order = await Order.findById(req.params.id)
+
+    if (!order) {
+        return res.status(404).json({
+            error: "Заказ не найден"
+        })
+    }
+
+    await fetch(
+        `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+
+                chat_id: order.telegramId,
+
+                text:
+`✅ Оплата подтверждена!
+
+Ваш заказ принят.
+Код заказа: ${order.orderCode}`
+
+            })
+        }
+    )
+
     await Order.findByIdAndUpdate(
         req.params.id,
         {
@@ -347,7 +378,7 @@ app.post("/confirm-order/:id", checkAuth, async (req, res) => {
 
         user: req.session.user.username,
 
-        action: "Подтвердил заказ",
+        action: "Подтвердил оплату",
 
         orderId: req.params.id
 
