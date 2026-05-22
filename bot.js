@@ -138,38 +138,28 @@ bot.on("document", async (ctx) => {
         const document = ctx.message.document
 
         await ctx.telegram.sendDocument(
-            CHECKS_CHAT_ID,
-            document.file_id,
-            {
-                caption:
+    CHECKS_CHAT_ID,
+    document.file_id,
+    {
+        caption:
 `🧾 Новый чек (PDF)
 
 📦 Код: ${code}
 👤 ${user.name}
+📞 ${user.phone}
+
 🛒 ${user.product}
 🔢 ${user.count}
+
 💰 ${user.count * user.price} тг
 
-🆔 ID: ${id}`,
-                reply_markup: {
-                    inline_keyboard: [
-                        [
-                            {
-                                text: "✅ Подтвердить",
-                                callback_data: `confirm_${code}_${id}`
-                            },
-                            {
-                                text: "❌ Отклонить",
-                                callback_data: `reject_${code}_${id}`
-                            }
-                        ]
-                    ]
-                }
-            }
-        )
+🆔 ID: ${id}`
+    }
+)
 
         await Order.create({
     orderCode: code,
+
     product: user.product,
     count: user.count,
 
@@ -180,6 +170,9 @@ bot.on("document", async (ctx) => {
     telegramId: id,
 
     totalPrice: user.count * user.price,
+
+    receiptFileId: document.file_id,
+
     status: "ожидание"
 })
 
@@ -333,62 +326,11 @@ bot.on("text", async (ctx) => {
 })
 
 // ---- Подтверждение ----
-bot.action(/confirm_(.+)_(.+)/, async (ctx) => {
-    const code = ctx.match[1]
-    const clientId = ctx.match[2]
 
-    try {
-        await Order.updateOne(
-            { orderCode: code },
-            { status: "оплачено" }
-        )
-
-        await ctx.telegram.sendMessage(
-            clientId,
-            `✅ Оплата подтверждена!\nВаш заказ принят.\nКод заказа: ${code}`
-        )
-
-        await ctx.editMessageCaption(
-            ctx.callbackQuery.message.caption + "\n\n✅ ОПЛАТА ПОДТВЕРЖДЕНА",
-            { reply_markup: { inline_keyboard: [] } }
-        )
-
-        await ctx.answerCbQuery("Подтверждено")
-
-    } catch (e) {
-        console.log(e)
-        await ctx.answerCbQuery("Ошибка")
-    }
-})
 
 // ---- Отклонение ----
-bot.action(/reject_(.+)_(.+)/, async (ctx) => {
-    const code = ctx.match[1]
-    const clientId = ctx.match[2]
 
-    try {
-        await Order.updateOne(
-            { orderCode: code },
-            { status: "отклонено" }
-        )
 
-        await ctx.telegram.sendMessage(
-            clientId,
-            `❌ Оплата не подтверждена`
-        )
-
-        await ctx.editMessageCaption(
-            ctx.callbackQuery.message.caption + "\n\n❌ ОПЛАТА ОТКЛОНЕНА",
-            { reply_markup: { inliчne_keyboard: [] } }
-        )
-
-        await ctx.answerCbQuery("Отклонено")
-
-    } catch (e) {
-        console.log(e)
-        await ctx.answerCbQuery("Ошибка")
-    }
-})
 
 bot.launch()
 console.log("Бот работает 🚀")
