@@ -64,14 +64,14 @@ app.use(session({
 
 const USERS = [
     {
-        username: "admin",
-        password: "osco_01",
+        username: "admin",   // Нуртуган 
+        password: "osco_00",
         role: "owner"
     },
 
     {
-        username: "cashier",
-        password: "osco_02",
+        username: "cashier1",  // Женисбек
+        password: "osco_01",
         role: "cashier"
     }
 ]
@@ -344,28 +344,32 @@ app.post("/confirm-order/:id", checkAuth, async (req, res) => {
         })
     }
 
-    await fetch(
-        `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
-        {
-            method: "POST",
+    const telegramResponse = await fetch(
+    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+    {
+        method: "POST",
 
-            headers: {
-                "Content-Type": "application/json"
-            },
+        headers: {
+            "Content-Type": "application/json"
+        },
 
-            body: JSON.stringify({
+        body: JSON.stringify({
 
-                chat_id: order.telegramId,
+            chat_id: order.telegramId,
 
-                text:
+            text:
 `✅ Оплата подтверждена!
 
 Ваш заказ принят.
 Код заказа: ${order.orderCode}`
 
-            })
-        }
-    )
+        })
+    }
+)
+
+const telegramData = await telegramResponse.json()
+
+console.log(telegramData)
 
     await Order.findByIdAndUpdate(
         req.params.id,
@@ -391,11 +395,42 @@ app.post("/confirm-order/:id", checkAuth, async (req, res) => {
 })
 
 
-// ============================================================
-// REJECT ORDER
-// ============================================================
-
 app.post("/reject-order/:id", checkAuth, async (req, res) => {
+
+    const order = await Order.findById(req.params.id)
+
+    if (!order) {
+        return res.status(404).json({
+            error: "Заказ не найден"
+        })
+    }
+    console.log("REJECT ORDER:", order)
+    const telegramResponse = await fetch(
+        `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+        {
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+
+                chat_id: order.telegramId,
+
+                text:
+`❌ Заказ отклонён.
+
+Оплата не подтверждена.
+Пожалуйста, проверьте чек и попробуйте снова.`
+
+            })
+        }
+    )
+
+    const telegramData = await telegramResponse.json()
+
+    console.log(telegramData)
 
     await Order.findByIdAndUpdate(
         req.params.id,
@@ -419,6 +454,10 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
     })
 
 })
+
+
+
+
 
 
 // ============================================================
