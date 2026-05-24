@@ -384,7 +384,7 @@ console.log(telegramData)
 
         action: "Подтвердил оплату",
 
-        orderId: req.params.id
+        orderId: order.orderCode
 
     })
 
@@ -445,7 +445,7 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
 
         action: "Отклонил заказ",
 
-        orderId: req.params.id
+        orderId: order.orderCode
 
     })
 
