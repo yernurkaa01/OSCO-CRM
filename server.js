@@ -394,7 +394,9 @@ console.log(telegramData)
 
 })
 
-
+// =======================
+// REJECT ORDER
+// =======================
 app.post("/reject-order/:id", checkAuth, async (req, res) => {
 
     const order = await Order.findById(req.params.id)
@@ -456,9 +458,89 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
 })
 
 
+//  ============
+//  ISSUE ORDER
+//  ============
 
 
+// ============================================================
+// ISSUE ORDER
+// ============================================================
 
+app.post("/issue-order/:id", checkAuth, async (req, res) => {
+
+    const order = await Order.findById(req.params.id)
+
+    if (!order) {
+        return res.status(404).json({
+            error: "Заказ не найден"
+        })
+    }
+
+    await Order.findByIdAndUpdate(
+        req.params.id,
+        {
+            status: "выдано"
+        }
+    )
+
+    await Log.create({
+
+        user: req.session.user.username,
+
+        action: "Выдал заказ",
+
+        orderId: order.orderCode
+
+    })
+
+    res.json({
+        success: true
+    })
+
+})
+
+
+// ============================================================
+// REFUND ORDER
+// ============================================================
+
+// ============================================================
+// REFUND ORDER
+// ============================================================
+
+app.post("/refund-order/:id", checkAuth, async (req, res) => {
+
+    const order = await Order.findById(req.params.id)
+
+    if (!order) {
+        return res.status(404).json({
+            error: "Заказ не найден"
+        })
+    }
+
+    await Order.findByIdAndUpdate(
+        req.params.id,
+        {
+            status: "возврат"
+        }
+    )
+
+    await Log.create({
+
+        user: req.session.user.username,
+
+        action: "Возврат средств",
+
+        orderId: order.orderCode
+
+    })
+
+    res.json({
+        success: true
+    })
+
+})
 
 // ============================================================
 // LOGS
