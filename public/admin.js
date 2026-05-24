@@ -35,14 +35,14 @@ function formatPrice(value) {
 
 // CSS-класс бейджа по статусу
 function statusClass(status) {
-    if (status === "подтверждено") return "status-confirmed"
+    if (status === "оплачено") return "status-confirmed"
     if (status === "отклонено")   return "status-rejected"
     return "status-pending"
 }
 
 // CSS-класс строки таблицы по статусу
 function rowClass(status) {
-    if (status === "подтверждено") return "row-confirmed"
+    if (status === "оплачено") return "row-confirmed"
     if (status === "отклонено")   return "row-rejected"
     return ""
 }
@@ -61,14 +61,14 @@ function playNewOrderSound() {
 // Обновляет 4 плашки статистики над таблицей
 function updateStats(orders) {
     const total     = orders.length
-    const confirmed = orders.filter(o => o.status === "подтверждено").length
+    const confirmed = orders.filter(o => o.status === "оплачено").length
     const rejected  = orders.filter(o => o.status === "отклонено").length
     const sum       = orders
-        .filter(o => o.status === "подтверждено")
+        .filter(o => o.status === "оплачено")
         .reduce((acc, o) => acc + Number(o.totalPrice || 0), 0)
 
     document.getElementById("stat-total").innerText     = "Всего: " + total
-    document.getElementById("stat-confirmed").innerText = "Подтверждено: " + confirmed
+    document.getElementById("stat-confirmed").innerText = "Оплачено: " + confirmed
     document.getElementById("stat-rejected").innerText  = "Отклонено: " + rejected
     document.getElementById("stat-sum").innerText       = "Сумма: " + formatPrice(sum)
 }
