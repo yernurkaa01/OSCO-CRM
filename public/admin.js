@@ -51,7 +51,7 @@ function statusClass(status) {
 // CSS-класс строки таблицы по статусу
 function rowClass(status) {
 
-    if (status === "оплачено")
+    if (status === "Продано")
         return "row-confirmed"
 
     if (status === "выдано")
@@ -84,7 +84,7 @@ function updateStats(orders) {
         .reduce((acc, o) => acc + Number(o.totalPrice || 0), 0)
 
     document.getElementById("stat-total").innerText     = "Всего: " + total
-    document.getElementById("stat-confirmed").innerText = "Оплачено: " + confirmed
+    document.getElementById("stat-confirmed").innerText = "Продано: " + confirmed
     document.getElementById("stat-rejected").innerText  = "Отклонено: " + rejected
     document.getElementById("stat-sum").innerText       = "Сумма: " + formatPrice(sum)
 }
