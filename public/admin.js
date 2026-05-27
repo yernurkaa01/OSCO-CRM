@@ -167,10 +167,10 @@ function renderOrders() {
                 <td>
                     
                     <button class="details-btn"
-                      onclick="showDetails(${JSON.stringify(o)})">Подробнее</button>
+                      onclick='showDetails(${JSON.stringify(o)})'>Подробнее</button>
                       ${o.status === "оплачено" ? `
                            <button class="btn confirm"
-                           onclick="issueOrder('${o._id}')">
+                           onclick='issueOrder("${o._id}")'>
                                     Выдать
                            
                             </button>
