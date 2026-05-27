@@ -111,7 +111,7 @@ async function openClient(encodedKey, name, phone) {
 
         // Считаем итоги
         const totalSpent = orders
-            .filter(o => o.status === "оплачено" || o.status === "подтверждено")
+            .filter(o => o.status === "оплачено" || o.status === "выдано")
             .reduce((s, o) => s + Number(o.totalPrice || 0), 0)
 
         const firstDate = orders.length ? new Date(orders[orders.length - 1].createdAt).toLocaleDateString("ru-RU") : "-"
