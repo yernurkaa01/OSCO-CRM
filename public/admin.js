@@ -309,7 +309,10 @@ function showDetails(o) {
 >
     Сохранить
             </button>
-            // Сохранить комментарий
+
+            <p><b>Дата:</b>${new Date(o.createdAt).toLocaleString("ru-RU")}</p>
+
+// Сохранить комментарий
 async function saveComment(id) {
 
     const comment =
