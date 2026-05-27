@@ -35,15 +35,31 @@ function formatPrice(value) {
 
 // CSS-класс бейджа по статусу
 function statusClass(status) {
-    if (status === "оплачено") return "status-confirmed"
-    if (status === "отклонено")   return "status-rejected"
+
+    if (status === "оплачено")
+        return "status-confirmed"
+
+    if (status === "выдано")
+        return "status-issued"
+
+    if (status === "отклонено")
+        return "status-rejected"
+
     return "status-pending"
 }
 
 // CSS-класс строки таблицы по статусу
 function rowClass(status) {
-    if (status === "оплачено") return "row-confirmed"
-    if (status === "отклонено")   return "row-rejected"
+
+    if (status === "оплачено")
+        return "row-confirmed"
+
+    if (status === "выдано")
+        return "row-issued"
+
+    if (status === "отклонено")
+        return "row-rejected"
+
     return ""
 }
 
