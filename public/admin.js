@@ -64,7 +64,7 @@ function updateStats(orders) {
     const confirmed = orders.filter(o => o.status === "оплачено").length
     const rejected  = orders.filter(o => o.status === "отклонено").length
     const sum       = orders
-        .filter(o => o.status === "оплачено")
+        .filter(o => o.status === "оплачено" || o.status === "выдано")
         .reduce((acc, o) => acc + Number(o.totalPrice || 0), 0)
 
     document.getElementById("stat-total").innerText     = "Всего: " + total
