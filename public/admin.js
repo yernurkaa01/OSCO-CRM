@@ -312,6 +312,10 @@ function showDetails(o) {
 
             <p><b>Дата:</b>${new Date(o.createdAt).toLocaleString("ru-RU")}</p>
 
+    `
+    document.getElementById("detailsModal").style.display = "block"
+}
+
 // Сохранить комментарий
 async function saveComment(id) {
 
@@ -334,11 +338,6 @@ async function saveComment(id) {
     loadOrders()
 
     alert("Комментарий сохранён")
-}
-        
-            <p><b>Дата:</b>        ${new Date(o.createdAt).toLocaleString("ru-RU")}</p>
-    `
-    document.getElementById("detailsModal").style.display = "block"
 }
 
 // Закрывает модальное окно
