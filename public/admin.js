@@ -165,9 +165,21 @@ function renderOrders() {
                 <td><span class="status ${statusClass(o.status)}">${o.status}</span></td>
                 <td>${o.name || "-"}</td>
                 <td>
-                    <button class="details-btn" onclick='showDetails(${JSON.stringify(o)})'>
-                        Подробнее
-                    </button>
+                    <td>
+                    <button class="details-btn"
+                      onclick="showDetails(${JSON.stringify(o)})">Подробнее</button>
+                      ${o.status === "оплачено" ? `
+                           <button class="btn confirm"
+                           onclick="issueOrder('${o._id}')">
+                                    Выдать
+                           
+                            </button>
+   
+                            <button class="btn reject"
+                             onclick="refundOrder('${o._id}')">
+                                    Возврат
+                            </button>` : ""}
+                    </td>
                 </td>
             </tr>
         `).join("")
@@ -306,7 +318,25 @@ async function rejectOrder(id) {
     loadOrders()
 }
 
+// Выдать заказ
+async function issueOrder(id) {
 
+    await fetch("/issue-order/" + id, {
+        method: "POST"
+    })
+
+    loadOrders()
+}
+
+// Возврат средств
+async function refundOrder(id) {
+
+    await fetch("/refund-order/" + id, {
+        method: "POST"
+    })
+
+    loadOrders()
+}
 // ============================================================
 // ИНИЦИАЛИЗАЦИЯ
 // ============================================================
