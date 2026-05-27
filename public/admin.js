@@ -282,8 +282,58 @@ function showDetails(o) {
         <p><b>Имя:</b>         ${o.name      || "-"}</p>
         <p><b>Телефон:</b>     ${o.phone     || "-"}</p>
         <p><b>Адрес:</b>       ${o.address   || "-"}</p>
-        <p><b>Комментарий:</b> ${o.comment   || "-"}</p>
-        <p><b>Дата:</b>        ${new Date(o.createdAt).toLocaleString("ru-RU")}</p>
+        <p><b>Комментарий:</b></p>
+
+        <textarea
+            id="managerComment"
+            style="
+                width:100%;
+                height:100px;
+                margin-top:10px;
+        padding:10px;
+        box-sizing:border-box;
+    "
+            >${o.comment || ""}</textarea>
+
+            <button 
+    onclick="saveComment('${o._id}')"
+
+    style="
+        margin-top:10px;
+        padding:10px 15px;
+        background:black;
+        color:white;
+        border:none;
+        cursor:pointer;
+    "
+>
+    Сохранить
+            </button>
+            // Сохранить комментарий
+async function saveComment(id) {
+
+    const comment =
+        document.getElementById("managerComment").value
+
+    await fetch("/update-comment/" + id, {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+            comment
+        })
+    })
+
+    loadOrders()
+
+    alert("Комментарий сохранён")
+}
+        
+            <p><b>Дата:</b>        ${new Date(o.createdAt).toLocaleString("ru-RU")}</p>
     `
     document.getElementById("detailsModal").style.display = "block"
 }

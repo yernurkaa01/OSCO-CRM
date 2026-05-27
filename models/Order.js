@@ -12,11 +12,15 @@ const orderSchema = new mongoose.Schema({
     name: String,
     phone: String,
     username: String,
+    
+    comment: String,
+
 
     telegramId: Number,
 
     totalPrice: Number,
     receiptFileId: String,
+    
 
     status: {
         type: String,

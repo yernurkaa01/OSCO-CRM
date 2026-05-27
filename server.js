@@ -538,6 +538,40 @@ app.post("/refund-order/:id", checkAuth, async (req, res) => {
 })
 
 // ============================================================
+// UPDATE COMMENT
+// ============================================================
+
+app.post("/update-comment/:id", checkAuth, async (req, res) => {
+
+    try {
+
+        await Order.findByIdAndUpdate(
+
+            req.params.id,
+
+            {
+                comment: req.body.comment
+            }
+
+        )
+
+        res.json({
+            success: true
+        })
+
+    } catch (err) {
+
+        console.log(err)
+
+        res.status(500).json({
+            error: "Ошибка сохранения комментария"
+        })
+
+    }
+
+})
+
+// ============================================================
 // LOGS
 // ============================================================
 
