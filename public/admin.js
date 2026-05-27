@@ -165,7 +165,7 @@ function renderOrders() {
                 <td><span class="status ${statusClass(o.status)}">${o.status}</span></td>
                 <td>${o.name || "-"}</td>
                 <td>
-                    <td>
+                    
                     <button class="details-btn"
                       onclick="showDetails(${JSON.stringify(o)})">Подробнее</button>
                       ${o.status === "оплачено" ? `
@@ -179,7 +179,7 @@ function renderOrders() {
                              onclick="refundOrder('${o._id}')">
                                     Возврат
                             </button>` : ""}
-                    </td>
+                    
                 </td>
             </tr>
         `).join("")
