@@ -75,20 +75,47 @@ function playNewOrderSound() {
 // ============================================================
 
 // Обновляет 4 плашки статистики над таблицей
+
 function updateStats(orders) {
-    const total     = orders.length
-    const confirmed = orders.filter(o => o.status === "оплачено").length
-    const rejected  = orders.filter(o => o.status === "отклонено").length
-    const sum       = orders
-        .filter(o => o.status === "оплачено" || o.status === "выдано")
-        .reduce((acc, o) => acc + Number(o.totalPrice || 0), 0)
 
-    document.getElementById("stat-total").innerText     = "Всего: " + total
-    document.getElementById("stat-confirmed").innerText = "Продано: " + confirmed
-    document.getElementById("stat-rejected").innerText  = "Отклонено: " + rejected
-    document.getElementById("stat-sum").innerText       = "Сумма: " + formatPrice(sum)
+    const total = orders.length
+
+    // Выручка
+    const revenue = orders
+        .filter(o =>
+            o.status === "оплачено" ||
+            o.status === "выдано"
+        )
+        .reduce((acc, o) =>
+            acc + Number(o.totalPrice || 0), 0)
+
+    // Успешно продано
+    const sold = orders.filter(o =>
+        o.status === "выдано"
+    ).length
+
+    // Возвраты
+    const refunds = orders.filter(o =>
+        o.status === "возврат"
+    ).length
+
+    // Отклонённые
+    const rejected = orders.filter(o =>
+        o.status === "отклонено"
+    ).length
+
+    document.getElementById("stat-total").innerText =
+        "Всего: " + total
+
+    document.getElementById("stat-confirmed").innerText =
+        "Продано: " + sold
+
+    document.getElementById("stat-rejected").innerText =
+        "Отклонено: " + rejected
+
+    document.getElementById("stat-sum").innerText =
+        "Выручка: " + formatPrice(revenue)
 }
-
 
 // ============================================================
 // СОРТИРОВКА
