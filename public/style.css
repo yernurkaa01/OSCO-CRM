@@ -267,3 +267,13 @@ tr:hover {
     color: #222;
     display: block;
 }
+
+.logout-link {
+    margin-left: auto;
+    background: #dc3545;
+    color: white !important;
+}
+
+.logout-link:hover {
+    background: #c82333;
+}
