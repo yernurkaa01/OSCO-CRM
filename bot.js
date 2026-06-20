@@ -340,12 +340,12 @@ bot.on("text", async (ctx) => {
         user.username = ctx.from.username || ""
         user.step = "check"
 
-        return ctx.reply(
-            `Каспи номер: 8 777 656 96 66\n` +
-            `Имя владельца: Нұртуған\n\n` +
-            `📄 После оплаты отправьте PDF чек из приложения Kaspi Bank`,
-            Markup.removeKeyboard()
-        )
+       return ctx.reply(
+    `⏳ Мы выставим вам счет в приложении Kaspi в течение минуты.\n\n` +
+    `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.`,
+    Markup.removeKeyboard()
+)
+
     }
 })
 
