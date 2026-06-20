@@ -23,8 +23,9 @@ bot.command("id", (ctx) => {
 const userData = {}
 
 const PRICES = {
-    "Цемент М450": 1600,
-    "Цемент М500": 1700,
+    "50кг Гежуба 450": 2600,
+    "1т Аккерман 500": 48500,
+    "1т Аккерман 600": 50000,
     "наружный краска": 800,
     "внутренный краска": 1000
 }
@@ -46,9 +47,14 @@ bot.start((ctx) => {
 // ---- Выбор цемента ----
 bot.hears("Цемент", (ctx) => {
     if (isChecksChat(ctx)) return
+
     ctx.reply(
-        "Выберите марку цемента:",
-        Markup.keyboard([["М450 - 1600тг", "М500 - 1700тг"]]).resize()
+        "Выберите цемент:",
+        Markup.keyboard([
+            ["50кг Гежуба 450 - 2600 тг"],
+            ["1т Аккерман 500 - 48500 тг"],
+            ["1т Аккерман 600 - 50000 тг"]
+        ]).resize()
     )
 })
 
@@ -62,24 +68,38 @@ bot.hears("Краска", (ctx) => {
 })
 
 // ---- Когда выбрали цемент ----
-bot.hears(["М450 - 1600тг", "М500 - 1700тг"], (ctx) => {
+bot.hears([
+    "50кг Гежуба 450 - 2600 тг",
+    "1т Аккерман 500 - 48500 тг",
+    "1т Аккерман 600 - 50000 тг"
+], (ctx) => {
+
     if (isChecksChat(ctx)) return
 
     const text = ctx.message.text
     let product = ""
 
-    if (text === "М450 - 1600тг") product = "Цемент М450"
-    if (text === "М500 - 1700тг") product = "Цемент М500"
+    if (text === "50кг Гежуба 450 - 2600 тг")
+        product = "50кг Гежуба 450"
+
+    if (text === "1т Аккерман 500 - 48500 тг")
+        product = "1т Аккерман 500"
+
+    if (text === "1т Аккерман 600 - 50000 тг")
+        product = "1т Аккерман 600"
 
     userData[ctx.from.id] = {
         product,
         fullText: text,
         price: PRICES[product],
-        unit: "мешков",
+        unit: "шт",
         step: "count"
     }
 
-    ctx.reply(`Сколько мешков ${text} нужно?`, Markup.removeKeyboard())
+    ctx.reply(
+        `Сколько нужно "${product}"?`,
+        Markup.removeKeyboard()
+    )
 })
 
 // ---- Когда выбрали краску ----
