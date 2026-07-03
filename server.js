@@ -682,6 +682,20 @@ app.get("/admin/history", checkAuth, ownerOnly, (req, res) => {
 })
 
 // ============================================================
+// WAREHOUSE PAGE
+// ============================================================
+
+app.get("/admin/warehouse", checkAuth, ownerOnly, (req, res) => {
+
+    res.sendFile(
+        path.join(__dirname, "views", "warehouse.html")
+    )
+
+})
+
+
+
+// ============================================================
 // AI
 // ============================================================
 
