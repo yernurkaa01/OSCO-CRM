@@ -277,3 +277,52 @@ tr:hover {
 .logout-link:hover {
     background: #c82333;
 }
+
+
+/* ============================================================
+   Warehouse Page
+   ============================================================ */
+
+.warehouse-container {
+    display: flex;
+    gap: 20px;
+    width: 95%;
+    margin: 20px auto;
+}
+
+.warehouse-sidebar {
+    width: 260px;
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.warehouse-content {
+    flex: 1;
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+}
+
+.category-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.category-item {
+    padding: 12px 15px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.category-item:hover {
+    background: #f1f3f5;
+}
+
+.category-item.active {
+    background: #343a40;
+    color: white;
+}
