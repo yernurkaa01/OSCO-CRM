@@ -23,11 +23,12 @@
             👥 Клиенты
         </a>
 
-        <a class="nav-link active" href="/admin/history">
+       <a class="nav-link" href="/admin/logs">
             📜 История действий
-        </a>
-         <a class="nav-link active" href="/admin/history">
-            📜 Склад
+       </a>
+
+        <a class="nav-link active" href="/admin/warehouse">
+            📦 Склад
         </a>
 
     </div>
@@ -42,55 +43,22 @@
             <thead>
 
                 <tr>
-                    <th>Товар</th>
-                    <th>Цемент</th>
-                    <th>Сухие смесы</th>
-                    <th>Иммулция</th>
+                     <th>Наименование</th>
+                     <th>Категория</th>
+                     <th>Количество</th>
+                     <th>Цена</th>
                 </tr>
 
             </thead>
 
-            <tbody id="historyTable"></tbody>
+            <tbody id="warehouseTable"></tbody>
 
         </table>
 
     </div>
 
 
-    <script>
 
-        async function loadHistory() {
-
-            const res = await fetch("/logs")
-
-            const logs = await res.json()
-
-            const table = document.getElementById("historyTable")
-
-            table.innerHTML = ""
-
-            logs.forEach(log => {
-
-                const tr = document.createElement("tr")
-
-                tr.innerHTML = `
-                    <td>${log.user}</td>
-                    <td>${log.action}</td>
-                    <td>${log.orderId}</td>
-                    <td>
-                        ${new Date(log.createdAt).toLocaleString()}
-                    </td>
-                `
-
-                table.appendChild(tr)
-
-            })
-
-        }
-
-        loadHistory()
-
-    </script>
 
 </body>
 </html>
