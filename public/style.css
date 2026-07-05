@@ -283,7 +283,7 @@ tr:hover {
    Warehouse Page
    ============================================================ */
 
-.warehouse-container {
+/* .warehouse-container {
     display: flex;
     gap: 20px;
     width: 95%;
@@ -325,4 +325,314 @@ tr:hover {
 .category-item.active {
     background: #343a40;
     color: white;
+} */
+
+
+
+
+/* ===== Общая разметка страницы склада ===== */
+.warehouse-container {
+  display: flex;
+  gap: 24px;
+  padding: 24px;
+  align-items: flex-start;
+}
+
+.warehouse-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid #eceef1;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.warehouse-sidebar h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: #111;
+}
+
+.category-list {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+}
+
+.category-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #444;
+  cursor: pointer;
+  margin-bottom: 2px;
+}
+
+.category-list li .count {
+  color: #9aa0a6;
+  font-size: 13px;
+}
+
+.category-list li:hover {
+  background: #f5f6f8;
+}
+
+.category-list li.active {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.category-list li.active .count {
+  color: #d8d8d8;
+}
+
+.manage-categories-btn {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fafafa;
+  color: #444;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.warehouse-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.warehouse-content > h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 26px;
+  margin: 0 0 18px;
+}
+
+/* ===== Панель поиска / действий ===== */
+.warehouse-toolbar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.warehouse-search {
+  flex: 1;
+  min-width: 240px;
+  padding: 11px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.warehouse-select {
+  padding: 11px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  font-size: 14px;
+  background: #fff;
+  min-width: 160px;
+}
+
+.btn {
+  padding: 11px 16px;
+  border-radius: 10px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-primary {
+  background: #1a1a1a;
+  color: #fff;
+  border-color: #1a1a1a;
+}
+
+/* ===== Карточки статистики ===== */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: #fff;
+  border: 1px solid #eceef1;
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.stat-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.stat-icon.blue { background: #eaf1ff; }
+.stat-icon.green { background: #e9f9ef; }
+.stat-icon.orange { background: #fff2e2; }
+.stat-icon.red { background: #fdeceb; }
+
+.stat-label {
+  font-size: 13px;
+  color: #8a8f98;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: #8a8f98;
+}
+
+/* ===== Таблица товаров ===== */
+.table-card {
+  background: #fff;
+  border: 1px solid #eceef1;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.table-card h2 {
+  font-size: 18px;
+  margin: 0;
+  padding: 18px 20px 12px;
+}
+
+table.warehouse-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.warehouse-table th {
+  text-align: left;
+  color: #8a8f98;
+  font-weight: 500;
+  padding: 10px 20px;
+  border-top: 1px solid #eceef1;
+  border-bottom: 1px solid #eceef1;
+  background: #fafbfc;
+}
+
+.warehouse-table td {
+  padding: 14px 20px;
+  border-bottom: 1px solid #f2f3f5;
+  color: #222;
+}
+
+.qty-ok { color: #1a9d52; font-weight: 600; }
+.qty-low { color: #e08a1e; font-weight: 600; }
+.qty-out { color: #d84c3f; font-weight: 600; }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.ok { background: #1a9d52; }
+.status-dot.low { background: #e08a1e; }
+.status-dot.out { background: #d84c3f; }
+
+.row-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.row-actions button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+/* ===== Футер таблицы: пагинация ===== */
+.table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  font-size: 13px;
+  color: #6b7280;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.legend {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pagination {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.pagination button {
+  min-width: 32px;
+  height: 32px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.pagination button.active {
+  background: #1a1a1a;
+  color: #fff;
+  border-color: #1a1a1a;
+}
+
+.empty-state {
+  padding: 40px 20px;
+  text-align: center;
+  color: #8a8f98;
+}
+
+@media (max-width: 900px) {
+  .warehouse-container { flex-direction: column; }
+  .warehouse-sidebar { width: 100%; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
 }
