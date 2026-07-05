@@ -18,6 +18,9 @@ import Client from "./models/Client.js"
 import Log from "./models/Log.js"
 import clientsRouter from "./routes/clients.js"
 
+import warehouseApiRouter from "./routes/warehouse.js"
+
+
 
 // ============================================================
 // __dirname FIX FOR ES MODULES
@@ -693,6 +696,12 @@ app.get("/admin/warehouse", checkAuth, ownerOnly, (req, res) => {
 
 })
 
+
+// ============================================================
+// WAREHOUSE API
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, warehouseApiRouter)
 
 
 // ============================================================

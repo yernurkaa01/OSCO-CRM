@@ -1,4 +1,4 @@
-const express = require('express');
+import express from "express";
 const router = express.Router();
 
 // ==========================================================
@@ -125,4 +125,4 @@ router.delete('/api/warehouse/products/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-module.exports = router;
+export default router;
