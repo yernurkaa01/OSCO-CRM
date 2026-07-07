@@ -143,8 +143,8 @@
           </td>
           <td>
             <div class="row-actions">
-              <button title="Изменить" onclick="Warehouse.editProduct(${p.id})">✏️</button>
-              <button title="Удалить" onclick="Warehouse.deleteProduct(${p.id})">🗑️</button>
+              <button title="Изменить" onclick="Warehouse.editProduct('${p.id}')">✏️</button>
+              <button title="Удалить" onclick="Warehouse.deleteProduct('${p.id}')">🗑️</button>
             </div>
           </td>
         </tr>
