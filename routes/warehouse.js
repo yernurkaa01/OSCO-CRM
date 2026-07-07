@@ -158,35 +158,6 @@ router.delete('/api/warehouse/products/:id', async (req, res) => {
   }
 });
 
-// ---------- GET /admin/api/warehouse/seed ----------
-// ВРЕМЕННЫЙ роут для первичного наполнения БАЗЫ, к которой реально
-// подключён этот сервер (то есть без риска "не туда засеялось").
-// Просто открой в браузере: https://твой-сайт/admin/api/warehouse/seed
-// Один раз, потом удали этот роут из кода.
-router.get('/api/warehouse/seed', async (req, res) => {
-  try {
-    const existing = await Product.countDocuments();
-    if (existing > 0) {
-      return res.json({
-        ok: false,
-        message: `В базе уже есть ${existing} товар(ов), ничего не добавляю.`,
-      });
-    }
 
-    const SEED_PRODUCTS = [
-      { name: "Цемент М500 (50 кг)", category: "cement", qty: 310, unit: "мешок", price: 2550 },
-      { name: "Цемент М400 (50 кг)", category: "cement", qty: 520, unit: "мешок", price: 2450 },
-      { name: "Цемент М550 (50 кг)", category: "cement", qty: 120, unit: "мешок", price: 2800 },
-      { name: "Грунтовка глубокого проникновения", category: "paint", qty: 48, unit: "шт", price: 2100 },
-      { name: "Эмульсия акриловая белая (14 кг)", category: "paint", qty: 32, unit: "ведро", price: 6500 },
-    ];
-
-    await Product.insertMany(SEED_PRODUCTS);
-    res.json({ ok: true, message: `Добавлено ${SEED_PRODUCTS.length} товаров` });
-  } catch (err) {
-    console.error("WAREHOUSE seed error:", err);
-    res.status(500).json({ error: "Ошибка сидирования" });
-  }
-});
 
 export default router;
