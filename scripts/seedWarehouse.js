@@ -9,9 +9,9 @@ import mongoose from "mongoose";
 import Product from "../models/Product.js";
 
 const SEED_PRODUCTS = [
-  { name: "Цемент М500 (50 кг)", category: "cement", qty: 310, unit: "мешок", price: 2550 },
-  { name: "Цемент М400 (50 кг)", category: "cement", qty: 520, unit: "мешок", price: 2450 },
-  { name: "Цемент М550 (50 кг)", category: "cement", qty: 120, unit: "мешок", price: 2800 },
+  { name: "Цемент Гежуба М450 (50 кг)", category: "cement", qty: 310, unit: "мешок", price: 2600 },
+  { name: "Цемент Аккерманн M500 (1т)", category: "cement", qty: 20, unit: "мешок", price: 48500 },
+  { name: "Цемент Аккерманн М600 (1т)", category: "cement", qty: 25, unit: "мешок", price: 50000 },
   { name: "Грунтовка глубокого проникновения", category: "paint", qty: 48, unit: "шт", price: 2100 },
   { name: "Эмульсия акриловая белая (14 кг)", category: "paint", qty: 32, unit: "ведро", price: 6500 },
 ];
@@ -27,6 +27,7 @@ async function seed() {
     await mongoose.disconnect();
     return;
   }
+
 
   await Product.insertMany(SEED_PRODUCTS);
   console.log(`✅ Добавлено ${SEED_PRODUCTS.length} товаров`);
