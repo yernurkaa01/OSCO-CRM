@@ -3,13 +3,6 @@ import Product from "../models/Product.js";
 
 const router = express.Router();
 
-// ==========================================================
-// СПИСОК КАТЕГОРИЙ
-// Пока категории — это просто фиксированный список тут в коде
-// (не отдельная коллекция в базе). Когда будет готова кнопка
-// "Управление категориями", можно вынести это в свою модель
-// Category и брать список оттуда же.
-// ==========================================================
 const CATEGORIES = [
   { key: 'cement', name: 'Цемент', icon: '🧱' },
   { key: 'paint', name: 'Эмульсии и краски', icon: '🎨' },
@@ -23,7 +16,6 @@ function statusOf(qty) {
   return { code: 'ok', label: 'Достаточно' };
 }
 
-// Приводим документ Mongo к формату, который ждёт фронтенд
 function serialize(doc) {
   const p = doc.toObject ? doc.toObject() : doc;
   return {
@@ -38,18 +30,15 @@ function serialize(doc) {
   };
 }
 
-// ---------- GET /admin/api/warehouse/categories ----------
 router.get('/api/warehouse/categories', async (req, res) => {
   try {
     const all = await Product.countDocuments();
-
     const counts = await Promise.all(
       CATEGORIES.map(async (c) => ({
         ...c,
         count: await Product.countDocuments({ category: c.key }),
       }))
     );
-
     res.json({ all, categories: counts });
   } catch (err) {
     console.error("WAREHOUSE categories error:", err);
@@ -57,20 +46,16 @@ router.get('/api/warehouse/categories', async (req, res) => {
   }
 });
 
-// ---------- GET /admin/api/warehouse/stats ----------
 router.get('/api/warehouse/stats', async (req, res) => {
   try {
     const totalItems = await Product.countDocuments();
-
     const unitsAgg = await Product.aggregate([
       { $group: { _id: null, totalUnits: { $sum: "$qty" } } },
     ]);
     const totalUnits = unitsAgg[0]?.totalUnits || 0;
-
     const lowStock = await Product.countDocuments({
       qty: { $gt: 0, $lte: LOW_STOCK_THRESHOLD },
     });
-
     const outOfStock = await Product.countDocuments({ qty: { $lte: 0 } });
 
     res.json({
@@ -86,8 +71,6 @@ router.get('/api/warehouse/stats', async (req, res) => {
   }
 });
 
-// ---------- GET /admin/api/warehouse/products ----------
-// query: category, search, page (1-based), limit
 router.get('/api/warehouse/products', async (req, res) => {
   try {
     const { category, search } = req.query;
@@ -95,12 +78,8 @@ router.get('/api/warehouse/products', async (req, res) => {
     const limit = Math.max(parseInt(req.query.limit, 10) || 10, 1);
 
     const filter = {};
-    if (category && category !== 'all') {
-      filter.category = category;
-    }
-    if (search && search.trim()) {
-      filter.name = { $regex: search.trim(), $options: 'i' };
-    }
+    if (category && category !== 'all') filter.category = category;
+    if (search && search.trim()) filter.name = { $regex: search.trim(), $options: 'i' };
 
     const total = await Product.countDocuments(filter);
     const docs = await Product.find(filter)
@@ -121,7 +100,6 @@ router.get('/api/warehouse/products', async (req, res) => {
   }
 });
 
-// ---------- POST /admin/api/warehouse/products ----------
 router.post('/api/warehouse/products', express.json(), async (req, res) => {
   try {
     const { name, category, qty, unit, price } = req.body || {};
@@ -144,7 +122,31 @@ router.post('/api/warehouse/products', express.json(), async (req, res) => {
   }
 });
 
-// ---------- DELETE /admin/api/warehouse/products/:id ----------
+// ---------- PUT /admin/api/warehouse/products/:id ----------
+router.put('/api/warehouse/products/:id', express.json(), async (req, res) => {
+  try {
+    const { name, category, qty, unit, price } = req.body || {};
+    if (!name || !category || qty == null || !unit || price == null) {
+      return res.status(400).json({ error: 'Заполните все поля товара' });
+    }
+
+    const updated = await Product.findByIdAndUpdate(
+      req.params.id,
+      { name, category, qty: Number(qty), unit, price: Number(price) },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Товар не найден' });
+    }
+
+    res.json(serialize(updated));
+  } catch (err) {
+    console.error("WAREHOUSE update error:", err);
+    res.status(500).json({ error: "Ошибка обновления товара" });
+  }
+});
+
 router.delete('/api/warehouse/products/:id', async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
@@ -157,7 +159,5 @@ router.delete('/api/warehouse/products/:id', async (req, res) => {
     res.status(500).json({ error: "Ошибка удаления товара" });
   }
 });
-
-
 
 export default router;

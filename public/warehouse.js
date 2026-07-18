@@ -18,6 +18,7 @@
     footerInfo: document.getElementById('footerInfo'),
     pagination: document.getElementById('pagination'),
     updatedAt: document.getElementById('updatedAt'),
+    addProductBtn: document.getElementById('addProductBtn'),
   };
 
   let debounceTimer = null;
@@ -30,7 +31,6 @@
     return code === 'ok' ? 'ok' : code === 'low' ? 'low' : 'out';
   }
 
-  // ---------- Категории (сайдбар + select) ----------
   async function loadCategories() {
     const res = await fetch(`${API}/categories`);
     const data = await res.json();
@@ -67,7 +67,6 @@
     loadProducts();
   }
 
-  // ---------- Статистика (карточки) ----------
   async function loadStats() {
     const res = await fetch(`${API}/stats`);
     const s = await res.json();
@@ -111,7 +110,6 @@
     els.updatedAt.textContent = `Обновлено: ${d.toLocaleDateString('ru-RU')}, ${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}`;
   }
 
-  // ---------- Таблица товаров ----------
   async function loadProducts() {
     const params = new URLSearchParams({
       category: state.category,
@@ -125,7 +123,7 @@
     els.tableCount.textContent = `Товары (${data.total.toLocaleString('ru-RU')})`;
 
     if (!data.items.length) {
-      els.tableBody.innerHTML = `<tr><td colspan="7"><div class="empty-state">Товары не найдены</div></td></tr>`;
+      els.tableBody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Товары не найдены</div></td></tr>`;
     } else {
       els.tableBody.innerHTML = data.items.map((p) => `
         <tr data-id="${p.id}">
@@ -186,9 +184,75 @@
     loadCategories();
   }
 
-  function editProduct(id) {
-    // Заготовка — сюда потом можно повесить модалку редактирования
-    alert('Редактирование товара #' + id + ' — пока не реализовано');
+  async function editProduct(id) {
+    const prodRes = await fetch(`${API}/products?search=&category=all&page=1&limit=1000`);
+    const data = await prodRes.json();
+    const product = data.items.find((p) => p.id === id);
+    if (!product) return alert('Товар не найден');
+
+    openProductModal(product, id);
+  }
+
+  function openProductModal(product, id) {
+    const isEdit = !!id;
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>${isEdit ? 'Редактирование товара' : 'Добавить товар'}</h3>
+        <label>Наименование
+          <input type="text" id="editName" value="${product.name}">
+        </label>
+        <label>Категория
+          <input type="text" id="editCategory" value="${product.category}">
+        </label>
+        <label>Количество
+          <input type="number" id="editQty" value="${product.qty}">
+        </label>
+        <label>Ед. изм.
+          <input type="text" id="editUnit" value="${product.unit}">
+        </label>
+        <label>Цена
+          <input type="number" id="editPrice" value="${product.price}">
+        </label>
+        <div class="modal-actions">
+          <button id="editCancel">Отмена</button>
+          <button id="editSave">${isEdit ? 'Сохранить' : 'Добавить'}</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#editCancel').onclick = () => overlay.remove();
+    overlay.querySelector('#editSave').onclick = async () => {
+      const body = {
+        name: overlay.querySelector('#editName').value.trim(),
+        category: overlay.querySelector('#editCategory').value.trim(),
+        qty: Number(overlay.querySelector('#editQty').value),
+        unit: overlay.querySelector('#editUnit').value.trim(),
+        price: Number(overlay.querySelector('#editPrice').value),
+      };
+
+      const url = isEdit ? `${API}/products/${id}` : `${API}/products`;
+      const method = isEdit ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Ошибка сохранения');
+        return;
+      }
+
+      overlay.remove();
+      loadProducts();
+      loadStats();
+      loadCategories();
+    };
   }
 
   // ---------- События ----------
@@ -204,6 +268,12 @@
   els.categorySelect.addEventListener('change', (e) => {
     selectCategory(e.target.value);
   });
+
+  if (els.addProductBtn) {
+    els.addProductBtn.addEventListener('click', () => {
+      openProductModal({ name: '', category: '', qty: 0, unit: '', price: 0 }, null);
+    });
+  }
 
   window.Warehouse = {
     goToPage(p) {
