@@ -19,6 +19,7 @@
     pagination: document.getElementById('pagination'),
     updatedAt: document.getElementById('updatedAt'),
     addProductBtn: document.getElementById('addProductBtn'),
+    manageCategoriesBtn: document.querySelector('.manage-categories-btn'),
   };
 
   let debounceTimer = null;
@@ -175,7 +176,7 @@
     els.pagination.innerHTML = html;
   }
 
-  // ---------- Действия ----------
+  // ---------- Товары: действия ----------
   async function deleteProduct(id) {
     if (!confirm('Удалить товар?')) return;
     await fetch(`${API}/products/${id}`, { method: 'DELETE' });
@@ -255,6 +256,90 @@
     };
   }
 
+  // ---------- Категории: управление ----------
+  function openCategoriesModal() {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>Управление категориями</h3>
+        <div id="categoriesManageList"></div>
+        <hr>
+        <label>Ключ (латиницей, без пробелов)
+          <input type="text" id="newCatKey" placeholder="dry_mix">
+        </label>
+        <label>Название
+          <input type="text" id="newCatName" placeholder="Сухие смеси">
+        </label>
+        <label>Иконка (эмодзи)
+          <input type="text" id="newCatIcon" placeholder="📦">
+        </label>
+        <div class="modal-actions">
+          <button id="catCancel">Закрыть</button>
+          <button id="catAdd">Добавить категорию</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    async function renderList() {
+      const res = await fetch(`${API}/categories`);
+      const data = await res.json();
+      const listEl = overlay.querySelector('#categoriesManageList');
+      listEl.innerHTML = data.categories.map((c) => `
+        <div class="cat-row">
+          <span>${c.icon} ${c.name} (${c.count})</span>
+          <button data-key="${c.key}" class="cat-delete-btn">🗑️</button>
+        </div>
+      `).join('') || '<p>Категорий пока нет</p>';
+
+      listEl.querySelectorAll('.cat-delete-btn').forEach((btn) => {
+        btn.onclick = async () => {
+          const key = btn.dataset.key;
+          const delRes = await fetch(`${API}/categories/${key}`, { method: 'DELETE' });
+          if (!delRes.ok) {
+            const err = await delRes.json().catch(() => ({}));
+            alert(err.error || 'Ошибка удаления');
+            return;
+          }
+          renderList();
+          loadCategories();
+        };
+      });
+    }
+
+    renderList();
+
+    overlay.querySelector('#catCancel').onclick = () => {
+      overlay.remove();
+      loadCategories();
+    };
+
+    overlay.querySelector('#catAdd').onclick = async () => {
+      const key = overlay.querySelector('#newCatKey').value.trim();
+      const name = overlay.querySelector('#newCatName').value.trim();
+      const icon = overlay.querySelector('#newCatIcon').value.trim();
+
+      const res = await fetch(`${API}/categories`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key, name, icon }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err.error || 'Ошибка добавления');
+        return;
+      }
+
+      overlay.querySelector('#newCatKey').value = '';
+      overlay.querySelector('#newCatName').value = '';
+      overlay.querySelector('#newCatIcon').value = '';
+      renderList();
+      loadCategories();
+    };
+  }
+
   // ---------- События ----------
   els.search.addEventListener('input', (e) => {
     clearTimeout(debounceTimer);
@@ -273,6 +358,10 @@
     els.addProductBtn.addEventListener('click', () => {
       openProductModal({ name: '', category: '', qty: 0, unit: '', price: 0 }, null);
     });
+  }
+
+  if (els.manageCategoriesBtn) {
+    els.manageCategoriesBtn.addEventListener('click', openCategoriesModal);
   }
 
   window.Warehouse = {

@@ -1,12 +1,8 @@
 import express from "express";
 import Product from "../models/Product.js";
+import Category from "../models/category.js";
 
 const router = express.Router();
-
-const CATEGORIES = [
-  { key: 'cement', name: 'Цемент', icon: '🧱' },
-  { key: 'paint', name: 'Эмульсии и краски', icon: '🎨' },
-];
 
 const LOW_STOCK_THRESHOLD = 50;
 
@@ -30,22 +26,75 @@ function serialize(doc) {
   };
 }
 
+// ---------- GET /admin/api/warehouse/categories ----------
 router.get('/api/warehouse/categories', async (req, res) => {
   try {
     const all = await Product.countDocuments();
-    const counts = await Promise.all(
-      CATEGORIES.map(async (c) => ({
-        ...c,
+    const cats = await Category.find().sort({ name: 1 });
+
+    const categories = await Promise.all(
+      cats.map(async (c) => ({
+        key: c.key,
+        name: c.name,
+        icon: c.icon,
         count: await Product.countDocuments({ category: c.key }),
       }))
     );
-    res.json({ all, categories: counts });
+
+    res.json({ all, categories });
   } catch (err) {
     console.error("WAREHOUSE categories error:", err);
     res.status(500).json({ error: "Ошибка загрузки категорий" });
   }
 });
 
+// ---------- POST /admin/api/warehouse/categories ----------
+router.post('/api/warehouse/categories', express.json(), async (req, res) => {
+  try {
+    const { key, name, icon } = req.body || {};
+    if (!key || !name) {
+      return res.status(400).json({ error: 'Укажите ключ и название категории' });
+    }
+
+    const exists = await Category.findOne({ key: key.toLowerCase().trim() });
+    if (exists) {
+      return res.status(400).json({ error: 'Такая категория уже существует' });
+    }
+
+    const category = await Category.create({
+      key: key.toLowerCase().trim(),
+      name: name.trim(),
+      icon: icon || '📦',
+    });
+
+    res.status(201).json(category);
+  } catch (err) {
+    console.error("WAREHOUSE create category error:", err);
+    res.status(500).json({ error: "Ошибка создания категории" });
+  }
+});
+
+// ---------- DELETE /admin/api/warehouse/categories/:key ----------
+router.delete('/api/warehouse/categories/:key', async (req, res) => {
+  try {
+    const inUse = await Product.countDocuments({ category: req.params.key });
+    if (inUse > 0) {
+      return res.status(400).json({ error: `Нельзя удалить — в категории ещё ${inUse} товар(ов)` });
+    }
+
+    const deleted = await Category.findOneAndDelete({ key: req.params.key });
+    if (!deleted) {
+      return res.status(404).json({ error: 'Категория не найдена' });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("WAREHOUSE delete category error:", err);
+    res.status(500).json({ error: "Ошибка удаления категории" });
+  }
+});
+
+// ---------- GET /admin/api/warehouse/stats ----------
 router.get('/api/warehouse/stats', async (req, res) => {
   try {
     const totalItems = await Product.countDocuments();
@@ -71,6 +120,7 @@ router.get('/api/warehouse/stats', async (req, res) => {
   }
 });
 
+// ---------- GET /admin/api/warehouse/products ----------
 router.get('/api/warehouse/products', async (req, res) => {
   try {
     const { category, search } = req.query;
@@ -100,6 +150,7 @@ router.get('/api/warehouse/products', async (req, res) => {
   }
 });
 
+// ---------- POST /admin/api/warehouse/products ----------
 router.post('/api/warehouse/products', express.json(), async (req, res) => {
   try {
     const { name, category, qty, unit, price } = req.body || {};
@@ -147,6 +198,7 @@ router.put('/api/warehouse/products/:id', express.json(), async (req, res) => {
   }
 });
 
+// ---------- DELETE /admin/api/warehouse/products/:id ----------
 router.delete('/api/warehouse/products/:id', async (req, res) => {
   try {
     const deleted = await Product.findByIdAndDelete(req.params.id);
