@@ -194,7 +194,7 @@
     openProductModal(product, id);
   }
 
-  function openProductModal(product, id) {
+  async function openProductModal(product, id) {
     const isEdit = !!id;
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -205,7 +205,7 @@
           <input type="text" id="editName" value="${product.name}">
         </label>
         <label>Категория
-          <input type="text" id="editCategory" value="${product.category}">
+          <select id="editCategory"></select>
         </label>
         <label>Количество
           <input type="number" id="editQty" value="${product.qty}">
@@ -224,6 +224,19 @@
     `;
     document.body.appendChild(overlay);
 
+    // заполняем select категориями из базы
+    const catRes = await fetch(`${API}/categories`);
+    const catData = await catRes.json();
+    const select = overlay.querySelector('#editCategory');
+
+    if (!catData.categories.length) {
+      select.innerHTML = `<option value="">Сначала добавьте категорию</option>`;
+    } else {
+      select.innerHTML = catData.categories.map((c) =>
+        `<option value="${c.name}" ${c.name === product.category ? 'selected' : ''}>${c.icon} ${c.name}</option>`
+      ).join('');
+    }
+
     overlay.querySelector('#editCancel').onclick = () => overlay.remove();
     overlay.querySelector('#editSave').onclick = async () => {
       const body = {
@@ -233,6 +246,11 @@
         unit: overlay.querySelector('#editUnit').value.trim(),
         price: Number(overlay.querySelector('#editPrice').value),
       };
+
+      if (!body.category) {
+        alert('Сначала добавьте хотя бы одну категорию через "Управление категориями"');
+        return;
+      }
 
       const url = isEdit ? `${API}/products/${id}` : `${API}/products`;
       const method = isEdit ? 'PUT' : 'POST';
@@ -265,13 +283,10 @@
         <h3>Управление категориями</h3>
         <div id="categoriesManageList"></div>
         <hr>
-        <label>Ключ (латиницей, без пробелов)
-          <input type="text" id="newCatKey" placeholder="dry_mix">
-        </label>
-        <label>Название
+        <label>Название категории
           <input type="text" id="newCatName" placeholder="Сухие смеси">
         </label>
-        <label>Иконка (эмодзи)
+        <label>Иконка (эмодзи, необязательно)
           <input type="text" id="newCatIcon" placeholder="📦">
         </label>
         <div class="modal-actions">
@@ -296,7 +311,7 @@
       listEl.querySelectorAll('.cat-delete-btn').forEach((btn) => {
         btn.onclick = async () => {
           const key = btn.dataset.key;
-          const delRes = await fetch(`${API}/categories/${key}`, { method: 'DELETE' });
+          const delRes = await fetch(`${API}/categories/${encodeURIComponent(key)}`, { method: 'DELETE' });
           if (!delRes.ok) {
             const err = await delRes.json().catch(() => ({}));
             alert(err.error || 'Ошибка удаления');
@@ -316,14 +331,13 @@
     };
 
     overlay.querySelector('#catAdd').onclick = async () => {
-      const key = overlay.querySelector('#newCatKey').value.trim();
       const name = overlay.querySelector('#newCatName').value.trim();
       const icon = overlay.querySelector('#newCatIcon').value.trim();
 
       const res = await fetch(`${API}/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, name, icon }),
+        body: JSON.stringify({ name, icon }),
       });
 
       if (!res.ok) {
@@ -332,7 +346,6 @@
         return;
       }
 
-      overlay.querySelector('#newCatKey').value = '';
       overlay.querySelector('#newCatName').value = '';
       overlay.querySelector('#newCatIcon').value = '';
       renderList();

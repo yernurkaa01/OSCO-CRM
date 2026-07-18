@@ -51,18 +51,20 @@ router.get('/api/warehouse/categories', async (req, res) => {
 // ---------- POST /admin/api/warehouse/categories ----------
 router.post('/api/warehouse/categories', express.json(), async (req, res) => {
   try {
-    const { key, name, icon } = req.body || {};
-    if (!key || !name) {
-      return res.status(400).json({ error: 'Укажите ключ и название категории' });
+    const { name, icon } = req.body || {};
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Укажите название категории' });
     }
 
-    const exists = await Category.findOne({ key: key.toLowerCase().trim() });
+    const key = name.trim();
+
+    const exists = await Category.findOne({ key });
     if (exists) {
       return res.status(400).json({ error: 'Такая категория уже существует' });
     }
 
     const category = await Category.create({
-      key: key.toLowerCase().trim(),
+      key,
       name: name.trim(),
       icon: icon || '📦',
     });
@@ -73,7 +75,6 @@ router.post('/api/warehouse/categories', express.json(), async (req, res) => {
     res.status(500).json({ error: "Ошибка создания категории" });
   }
 });
-
 // ---------- DELETE /admin/api/warehouse/categories/:key ----------
 router.delete('/api/warehouse/categories/:key', async (req, res) => {
   try {
