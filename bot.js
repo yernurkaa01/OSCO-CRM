@@ -2,6 +2,7 @@ import "dotenv/config"
 import { Telegraf, Markup } from "telegraf"
 import mongoose from "mongoose"
 import Order from "./models/Order.js"
+import { checkProductStock, STOCK_STATUS } from "./services/stockCheck.js"
 
 console.log("SERVER URI:", process.env.MONGO_URI)
 mongoose.connect(process.env.MONGO_URI)
@@ -32,6 +33,78 @@ const PRICES = {
 
 function generateOrderCode() {
     return Math.floor(1000 + Math.random() * 9000).toString()
+}
+
+const MAIN_MENU = Markup.keyboard([["Цемент", "Краска"], ["Сухие смеси"]]).resize()
+
+function formatOrderSummary(user) {
+    return (
+        `📋 *Ваш заказ:*\n\n` +
+        `🛒 ${user.product}\n` +
+        `🔢 ${user.count} ${user.unit}\n` +
+        `💰 *Итого:* ${(user.count * user.price).toLocaleString("ru-RU")} ₸\n\n` +
+        `Подтвердить заказ?`
+    )
+}
+
+async function proceedToOrderConfirm(ctx, user) {
+    user.step = "confirm"
+
+    return ctx.reply(formatOrderSummary(user), {
+        parse_mode: "Markdown",
+        ...Markup.keyboard([["Да", "Нет"]]).resize()
+    })
+}
+
+async function handleStockCheck(ctx, user, requestedQty) {
+    const stock = await checkProductStock(user.product, requestedQty)
+    const unit = user.unit
+
+    if (stock.status === STOCK_STATUS.ERROR) {
+        return ctx.reply(
+            "⚠️ *Не удалось проверить наличие товара*\n\n" +
+            "Попробуйте ещё раз через минуту или свяжитесь с менеджером.",
+            { parse_mode: "Markdown", ...MAIN_MENU }
+        )
+    }
+
+    if (stock.status === STOCK_STATUS.NOT_FOUND || stock.status === STOCK_STATUS.OUT_OF_STOCK) {
+        delete userData[ctx.from.id]
+        return ctx.reply(
+            "😔 *Данный товар временно закончился*\n\n" +
+            "🚚 Мы уже везём новую партию — ожидайте поступления в ближайшее время!\n\n" +
+            "Выберите другой товар или зайдите позже 👇",
+            { parse_mode: "Markdown", ...MAIN_MENU }
+        )
+    }
+
+    if (stock.status === STOCK_STATUS.PARTIAL) {
+        user.requestedCount = requestedQty
+        user.availableCount = stock.availableQty
+        user.step = "partial_confirm"
+
+        return ctx.reply(
+            `⚠️ *К сожалению, в таком количестве товара нет*\n\n` +
+            `📦 Вы запросили: *${requestedQty}* ${unit}\n` +
+            `✅ Сейчас на складе: *${stock.availableQty}* ${unit}\n\n` +
+            `Желаете оформить то, что есть?`,
+            {
+                parse_mode: "Markdown",
+                ...Markup.keyboard([["✅ Да, оформить", "❌ Нет, отменить"]]).resize()
+            }
+        )
+    }
+
+    user.count = requestedQty
+    await ctx.reply(
+        `✅ *Товар в наличии!*\n\n` +
+        `📦 ${user.product}\n` +
+        `🔢 Запрошено: *${requestedQty}* ${unit}\n` +
+        `🏭 На складе: *${stock.availableQty}* ${unit}\n\n` +
+        `Переходим к оформлению заказа 👇`,
+        { parse_mode: "Markdown" }
+    )
+    return proceedToOrderConfirm(ctx, user)
 }
 
 // ---- START ----
@@ -273,7 +346,7 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    // ---- количество ----
+    // ---- количество + проверка остатков на складе ----
     if (user.step === "count") {
         const count = Number(text)
 
@@ -281,16 +354,42 @@ bot.on("text", async (ctx) => {
             return ctx.reply("Введите корректное количество (целое число):")
         }
 
-        user.count = count
-        user.step = "confirm"
+        try {
+            return await handleStockCheck(ctx, user, count)
+        } catch (error) {
+            console.error("Ошибка проверки склада:", error)
+            return ctx.reply(
+                "⚠️ Произошла ошибка при проверке наличия. Попробуйте ещё раз."
+            )
+        }
+    }
 
-        return ctx.reply(
-            `Ваш заказ:\n` +
-            `${user.product} — ${user.count} ${user.unit}\n` +
-            `Общая сумма: ${(user.count * user.price).toLocaleString("ru-RU")} ₸\n\n` +
-            `Подтвердить?`,
-            Markup.keyboard([["Да", "Нет"]]).resize()
-        )
+    // ---- частичное наличие: оформить доступное количество? ----
+    if (user.step === "partial_confirm") {
+        const yes = ["✅ да, оформить", "да, оформить", "да"].includes(text.toLowerCase())
+        const no = ["❌ нет, отменить", "нет, отменить", "нет"].includes(text.toLowerCase())
+
+        if (yes) {
+            user.count = user.availableCount
+            delete user.requestedCount
+            delete user.availableCount
+
+            await ctx.reply(
+                `👍 Хорошо! Оформляем *${user.count}* ${user.unit}.`,
+                { parse_mode: "Markdown" }
+            )
+            return proceedToOrderConfirm(ctx, user)
+        }
+
+        if (no) {
+            delete userData[id]
+            return ctx.reply(
+                "Заказ отменён. Выберите другой товар 👇",
+                MAIN_MENU
+            )
+        }
+
+        return ctx.reply("Нажмите «✅ Да, оформить» или «❌ Нет, отменить»")
     }
 
     // ---- подтверждение ----
@@ -365,7 +464,7 @@ bot.on("text", async (ctx) => {
     `⏳ Мы выставим вам счет в приложении Kaspi в течение минуты.\n\n` +
     `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.\n\n` +
     `📄 После оплаты отправьте PDF чек в этот чат.`,
-    Markup.removeKeyboard()
+    Markup.removeKeyboard() 
 )
 
 
