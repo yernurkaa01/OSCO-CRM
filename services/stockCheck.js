@@ -1,87 +1,77 @@
 import Product from "../models/Product.js"
-
-/**
- * Соответствие названий товаров в боте и в коллекции products (склад).
- * При добавлении новых позиций в бот — добавьте строку сюда.
- */
-export const BOT_TO_DB_PRODUCT = {
-    "50кг Гежуба 450": "Цемент Гежуба М450 (50 кг)",
-    "1т Аккерманн 500": "Цемент Аккерманн M500 (1т)",
-    "1т Аккерманн 600": "Цемент Аккерманн М600 (1т)",
-    "наружный краска": "наружный краска",
-    "внутренный краска": "внутренный краска"
-}
+import Order from "../models/Order.js"
 
 export const STOCK_STATUS = {
-    AVAILABLE: "available",
-    PARTIAL: "partial",
-    OUT_OF_STOCK: "out_of_stock",
-    NOT_FOUND: "not_found",
-    ERROR: "error"
-}
-
-async function findProductInDb(botProductName) {
-    const dbName = BOT_TO_DB_PRODUCT[botProductName]
-
-    if (dbName) {
-        const byExactName = await Product.findOne({ name: dbName })
-        if (byExactName) return byExactName
-    }
-
-    return Product.findOne({
-        name: { $regex: botProductName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" }
-    })
+    OK: "OK",
+    PARTIAL: "PARTIAL",
+    OUT_OF_STOCK: "OUT_OF_STOCK",
+    NOT_FOUND: "NOT_FOUND",
+    ERROR: "ERROR"
 }
 
 /**
- * Проверяет остаток товара на складе перед оформлением заказа.
- *
- * @param {string} productName — ключ товара из бота (user.product)
- * @param {number} requestedQty — запрошенное количество
- * @returns {Promise<{ status: string, availableQty: number, product: object|null, error?: string }>}
+ * Считает, сколько товара уже "забронировано" неподтверждёнными заказами
+ * (заказы клиентов, которые прислали чек, но менеджер ещё не подтвердил оплату).
+ * @param {string} productName
+ * @returns {Promise<number>}
+ */
+async function getReservedQty(productName) {
+    const result = await Order.aggregate([
+        { $match: { product: productName, status: "ожидание" } },
+        { $group: { _id: null, total: { $sum: "$count" } } }
+    ])
+
+    return result[0]?.total || 0
+}
+
+/**
+ * Проверяет наличие товара с учётом уже забронированных (но не подтверждённых) заказов.
+ * Реально доступно = остаток на складе − сумма заказов в статусе "ожидание"
+ * @param {string} productName
+ * @param {number} requestedQty
+ * @returns {Promise<{status: string, availableQty?: number}>}
  */
 export async function checkProductStock(productName, requestedQty) {
     try {
-        const product = await findProductInDb(productName)
+        const product = await Product.findOne({ name: productName })
 
         if (!product) {
-            return {
-                status: STOCK_STATUS.NOT_FOUND,
-                availableQty: 0,
-                product: null
-            }
+            console.log(`⚠️ Товар не найден в БД: "${productName}"`)
+            return { status: STOCK_STATUS.NOT_FOUND }
         }
 
-        const availableQty = product.qty ?? 0
+        const reserved = await getReservedQty(productName)
+        const availableQty = Math.max(0, product.qty - reserved)
 
         if (availableQty <= 0) {
-            return {
-                status: STOCK_STATUS.OUT_OF_STOCK,
-                availableQty: 0,
-                product
-            }
+            return { status: STOCK_STATUS.OUT_OF_STOCK, availableQty: 0 }
         }
 
-        if (availableQty >= requestedQty) {
-            return {
-                status: STOCK_STATUS.AVAILABLE,
-                availableQty,
-                product
-            }
+        if (availableQty < requestedQty) {
+            return { status: STOCK_STATUS.PARTIAL, availableQty }
         }
 
-        return {
-            status: STOCK_STATUS.PARTIAL,
-            availableQty,
-            product
-        }
+        return { status: STOCK_STATUS.OK, availableQty }
+
     } catch (error) {
-        console.error("stockCheck error:", error)
-        return {
-            status: STOCK_STATUS.ERROR,
-            availableQty: 0,
-            product: null,
-            error: error.message
-        }
+        console.error("Ошибка при проверке остатков:", error)
+        return { status: STOCK_STATUS.ERROR }
+    }
+}
+
+/**
+ * Физически списывает товар со склада.
+ * Вызывать ТОЛЬКО когда менеджер подтвердил оплату заказа в CRM.
+ * @param {string} productName
+ * @param {number} qty
+ */
+export async function decreaseStock(productName, qty) {
+    try {
+        await Product.updateOne(
+            { name: productName },
+            { $inc: { qty: -qty } }
+        )
+    } catch (error) {
+        console.error("Ошибка при списании остатков:", error)
     }
 }
