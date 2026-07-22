@@ -19,6 +19,7 @@ import Log from "./models/Log.js"
 import clientsRouter from "./routes/clients.js"
 
 import warehouseApiRouter from "./routes/warehouse.js"
+import { decreaseStock } from "./services/stockCheck.js"
 
 
 
@@ -374,6 +375,9 @@ const telegramData = await telegramResponse.json()
 
 console.log(telegramData)
 
+    // ⬇️ Списываем товар со склада только сейчас, когда оплата реально подтверждена
+    await decreaseStock(order.product, order.count)
+
     await Order.findByIdAndUpdate(
         req.params.id,
         {
@@ -523,6 +527,9 @@ app.post("/refund-order/:id", checkAuth, async (req, res) => {
             status: "возврат"
         }
     )
+
+    // ⬇️ При возврате товар возвращается обратно на склад
+    await decreaseStock(order.product, -order.count)
 
     await Log.create({
 
