@@ -146,8 +146,8 @@ tr:hover {
     font-weight: bold;
 }
 
-.confirm { background: green; }
-.reject  { background: crimson; }
+.btn.confirm { background: green; color: white; }
+.btn.reject  { background: crimson; color: white; }
 
 .filter-btn {
     background: #007bff;
