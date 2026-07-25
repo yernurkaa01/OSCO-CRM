@@ -207,6 +207,7 @@ function renderOrders() {
                 <td class="price">${formatPrice(o.totalPrice)}</td>
                 <td><span class="status ${statusClass(o.status)}">${o.status}</span></td>
                 <td>${o.name || "-"}</td>
+                <td>${o.paymentBank || "-"}</td>
                 <td>
                     
                     <button class="details-btn"
@@ -238,6 +239,7 @@ function renderOrders() {
                     <th onclick="setSort('totalPrice')">Сумма</th>
                     <th onclick="setSort('status')">Статус</th>
                     <th onclick="setSort('name')">Имя</th>
+                    <th onclick="setSort('paymentBank')">Банк</th>
                     <th>Детали</th>
                 </tr>
                 ${rows}
@@ -288,6 +290,7 @@ async function loadPendingOrders() {
                 <p><b>Кол-во:</b> ${o.count}</p>
                 <p><b>Сумма:</b> <span class="price">${formatPrice(o.totalPrice)}</span></p>
                 <p><b>Имя:</b> ${o.name || "-"}</p>
+                <p><b>Банк:</b> ${o.paymentBank || "-"}</p>
                 <p><b>Время:</b> ${new Date(o.createdAt).toLocaleTimeString()}</p>
                 <p><b>Статус:</b> <span class="status status-pending">ожидание</span></p>
                 ${o.receiptFileId ? `
@@ -324,6 +327,7 @@ function showDetails(o) {
         <p><b>Статус:</b>      ${o.status    || "-"}</p>
         <p><b>Имя:</b>         ${o.name      || "-"}</p>
         <p><b>Телефон:</b>     ${o.phone     || "-"}</p>
+        <p><b>Банк:</b>        ${o.paymentBank || "-"}</p>
         <p><b>Адрес:</b>       ${o.address   || "-"}</p>
         <p><b>Комментарий:</b></p>
 

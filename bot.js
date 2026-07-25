@@ -235,6 +235,7 @@ bot.on("document", async (ctx) => {
 📦 Код: ${code}
 👤 ${user.name}
 📞 ${user.phone}
+🏦 ${user.bank}
 
 🛒 ${user.product}
 🔢 ${user.count}
@@ -255,6 +256,7 @@ bot.on("document", async (ctx) => {
             telegramId: id,
             totalPrice: user.count * user.price,
             receiptFileId: document.file_id,
+            paymentBank: user.bank,
             status: "ожидание"
         })
 
@@ -278,15 +280,12 @@ bot.on("contact", (ctx) => {
 
     user.phone = ctx.message.contact.phone_number
     user.username = ctx.from.username || ""
-    user.step = "check"
+    user.step = "bank_choice"
 
     return ctx.reply(
-    `⏳ Мы выставим вам счет в приложении Kaspi в течение минуты.\n\n` +
-    `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.\n\n` +
-    `📄 После оплаты отправьте PDF чек в этот чат.`,
-    Markup.removeKeyboard()
-)
-
+        "Выберите удобный банк для оплаты:",
+        Markup.keyboard([["Kaspi Bank", "Halyk Bank"]]).resize().oneTime()
+    )
 })
 
 // ---- Кнопка "Ввести вручную" ----
@@ -436,6 +435,29 @@ bot.on("text", async (ctx) => {
 )
     }
 
+    // ---- выбор банка ----
+    if (user.step === "bank_choice") {
+        if (text !== "Kaspi Bank" && text !== "Halyk Bank") {
+            return ctx.reply(
+                "Пожалуйста, выберите банк с помощью кнопок: Kaspi Bank или Halyk Bank",
+                Markup.keyboard([["Kaspi Bank", "Halyk Bank"]]).resize().oneTime()
+            )
+        }
+
+        user.bank = text
+        user.step = "check"
+
+        const bankMessage = text === "Kaspi Bank"
+            ? `⏳ Мы выставим вам счет в приложении Kaspi Bank в течение минуты.\n\n` +
+              `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.\n\n` +
+              `📄 После оплаты отправьте PDF чек в этот чат.`
+            : `⏳ Мы выставим вам счет в приложении Halyk Bank в течение минуты.\n\n` +
+              `📱 Пожалуйста, перейдите в Halyk Homebank -> Платежи и оплатите его.\n\n` +
+              `📄 После оплаты отправьте PDF чек в этот чат.`
+
+        return ctx.reply(bankMessage, Markup.removeKeyboard())
+    }
+
     // ---- телефон вручную ----
     if (user.step === "phone_manual") {
         const validPhone = validatePhone(text)
@@ -458,16 +480,12 @@ bot.on("text", async (ctx) => {
 
         user.phone = validPhone
         user.username = ctx.from.username || ""
-        user.step = "check"
+        user.step = "bank_choice"
 
-       return ctx.reply(
-    `⏳ Мы выставим вам счет в приложении Kaspi в течение минуты.\n\n` +
-    `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.\n\n` +
-    `📄 После оплаты отправьте PDF чек в этот чат.`,
-    Markup.removeKeyboard() 
-)
-
-
+        return ctx.reply(
+            "Выберите удобный банк для оплаты:",
+            Markup.keyboard([["Kaspi Bank", "Halyk Bank"]]).resize().oneTime()
+        )
     }
 })
 
