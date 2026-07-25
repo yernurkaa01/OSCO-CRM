@@ -1,10 +1,7 @@
 import mongoose from "mongoose"
 
 const orderSchema = new mongoose.Schema({
-    orderCode: {
-        type: String,
-        unique: true
-    },
+    orderCode: String,   // без unique — у одного заказа может быть несколько товаров с одним orderCode
 
     product: String,
     count: Number,
