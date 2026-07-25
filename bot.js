@@ -74,7 +74,7 @@ const DRY_MIX_CATALOG = {
 }
 
 // Путь к PDF-каталогу на сервере — положи файл в проект и поправь путь при необходимости
-const CATALOG_PATH = "./files/Каталог.pdf"
+const CATALOG_PATH = "./files/catalog_suhie_smesi.pdf" 
 
 function generateOrderCode() {
     return Math.floor(1000 + Math.random() * 9000).toString()
