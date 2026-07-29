@@ -2,6 +2,7 @@ import "dotenv/config"
 import { Telegraf, Markup } from "telegraf"
 import mongoose from "mongoose"
 import Order from "./models/Order.js"
+import Product from "./models/Product.js"
 import { checkProductStock, STOCK_STATUS } from "./services/stockCheck.js"
 
 console.log("SERVER URI:", process.env.MONGO_URI)
@@ -36,10 +37,11 @@ function getOrCreateUser(id) {
     return userData[id]
 }
 
+// ⚠️ Цемент больше НЕ хардкодится здесь — цена и название берутся из
+// коллекции Product по коду (C01, C02, C03...). См. bot.hears("Цемент").
+// Краска пока остаётся хардкодом — это отдельная категория, ещё не
+// переведённая на единую систему товаров.
 const PRICES = {
-    "Цемент (Гежуба) М450 (50 кг)": 2600,
-    "Цемент (Аккерманн) М500 (1 т)": 48500,
-    "Цемент (Аккерманн) М600 (1 т)": 50000,
     "наружный краска": 800,
     "внутренный краска": 1000
 }
@@ -48,6 +50,7 @@ const PRICES = {
 // КАТАЛОГ СУХИХ СМЕСЕЙ — по кодам (A01, A02...)
 // ⚠️ ЦЕНЫ НУЖНО ЗАПОЛНИТЬ — сейчас стоит null как заглушка.
 // Пока цена null, бот не даст оформить заказ на этот товар.
+// (Эта категория тоже пока не переведена на Product — в планах.)
 // ============================================================
 const DRY_MIX_CATALOG = {
     A01: { name: "AlinEX Finish 25кг — шпатлёвка полимерная", price: null, unit: "мешок" },
@@ -73,8 +76,8 @@ const DRY_MIX_CATALOG = {
     A21: { name: "ВОЛМА Нивилир экспресс 25кг — наливной пол", price: null, unit: "мешок" }
 }
 
-// Путь к PDF-каталогу на сервере — положи файл в проект и поправь путь при необходимости
-const CATALOG_PATH = "./files/catalog_suhie_smesi.pdf" 
+// Путь к PDF-каталогу на сервере — файл должен лежать в files/catalog_suhie_smesi.pdf
+const CATALOG_PATH = "./files/catalog_suhie_smesi.pdf"
 
 function generateOrderCode() {
     return Math.floor(1000 + Math.random() * 9000).toString()
@@ -197,17 +200,62 @@ bot.start((ctx) => {
     )
 })
 
-// ---- Выбор цемента ----
-bot.hears("Цемент", (ctx) => {
+// ---- Выбор цемента — кнопки собираются динамически из базы (Product) ----
+bot.hears("Цемент", async (ctx) => {
     if (isChecksChat(ctx)) return
 
-    ctx.reply(
+    let products = []
+    try {
+        products = await Product.find({ category: "cement" }).sort({ name: 1 })
+    } catch (e) {
+        console.log("Ошибка загрузки цемента из БД:", e)
+        return ctx.reply("⚠️ Не удалось загрузить список цемента. Попробуйте позже.")
+    }
+
+    if (products.length === 0) {
+        return ctx.reply("Сейчас нет доступных позиций цемента. Свяжитесь с менеджером.")
+    }
+
+    const buttons = products.map(p =>
+        [`${p.name} - ${p.price.toLocaleString("ru-RU")} тг`]
+    )
+
+    return ctx.reply(
         "Выберите цемент:",
-        Markup.keyboard([
-            ["Цемент (Гежуба) М450 (50 кг) - 2600 тг"],
-            ["Цемент (Аккерманн) М500 (1 т) - 48500 тг"],
-            ["Цемент (Аккерманн) М600 (1 т) - 50000 тг"]
-        ]).resize()
+        Markup.keyboard(buttons).resize()
+    )
+})
+
+// ---- Когда выбрали конкретный цемент кнопкой ----
+bot.hears(/^Цемент .+ - [\d\s]+ тг$/, async (ctx) => {
+    if (isChecksChat(ctx)) return
+
+    const text = ctx.message.text
+
+    // Убираем " - <цена> тг" в конце, чтобы получить чистое название товара
+    const productName = text.replace(/ - [\d\s]+ тг$/, "")
+
+    let product
+    try {
+        product = await Product.findOne({ name: productName, category: "cement" })
+    } catch (e) {
+        console.log("Ошибка поиска цемента по названию:", e)
+        return ctx.reply("⚠️ Произошла ошибка. Попробуйте ещё раз.")
+    }
+
+    if (!product) {
+        return ctx.reply("❌ Товар не найден. Попробуйте выбрать заново.", Markup.keyboard([["Цемент", "Краска"], ["Сухие смеси"]]).resize())
+    }
+
+    const user = getOrCreateUser(ctx.from.id)
+    user.product = product.name
+    user.price = product.price
+    user.unit = product.unit
+    user.step = "count"
+
+    return ctx.reply(
+        `Сколько нужно "${product.name}"?`,
+        Markup.removeKeyboard()
     )
 })
 
@@ -244,40 +292,6 @@ bot.hears("Сухие смеси", async (ctx) => {
     }
 
     return ctx.reply("Ожидаю код товара из каталога 👆", Markup.removeKeyboard())
-})
-
-// ---- Когда выбрали цемент ----
-bot.hears([
-    "Цемент (Гежуба) М450 (50 кг) - 2600 тг",
-    "Цемент (Аккерманн) М500 (1 т) - 48500 тг",
-    "Цемент (Аккерманн) М600 (1 т) - 50000 тг"
-], (ctx) => {
-
-    if (isChecksChat(ctx)) return
-
-    const text = ctx.message.text
-    let product = ""
-
-    if (text === "Цемент (Гежуба) М450 (50 кг) - 2600 тг")
-        product = "Цемент (Гежуба) М450 (50 кг)"
-
-    if (text === "Цемент (Аккерманн) М500 (1 т) - 48500 тг")
-        product = "Цемент (Аккерманн) М500 (1 т)"
-
-    if (text === "Цемент (Аккерманн) М600 (1 т) - 50000 тг")
-        product = "Цемент (Аккерманн) М600 (1 т)"
-
-    const user = getOrCreateUser(ctx.from.id)
-    user.product = product
-    user.fullText = text
-    user.price = PRICES[product]
-    user.unit = "шт"
-    user.step = "count"
-
-    ctx.reply(
-        `Сколько нужно "${product}"?`,
-        Markup.removeKeyboard()
-    )
 })
 
 // ---- Когда выбрали краску ----
@@ -650,7 +664,7 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    // ---- шаг не распознан (например, между выбором товара и меню) ----
+    // ---- шаг не распознан ----
     return ctx.reply("Выберите товар:", MAIN_MENU)
 })
 
