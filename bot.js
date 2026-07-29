@@ -206,7 +206,7 @@ bot.hears("Цемент", async (ctx) => {
 
     let products = []
     try {
-        products = await Product.find({ category: "cement" }).sort({ name: 1 })
+        products = await Product.find({ category: "Цемент" }).sort({ name: 1 })
     } catch (e) {
         console.log("Ошибка загрузки цемента из БД:", e)
         return ctx.reply("⚠️ Не удалось загрузить список цемента. Попробуйте позже.")
@@ -237,7 +237,7 @@ bot.hears(/^Цемент .+ - [\d\s]+ тг$/, async (ctx) => {
 
     let product
     try {
-        product = await Product.findOne({ name: productName, category: "cement" })
+        product = await Product.findOne({ name: productName, category: "Цемент" })
     } catch (e) {
         console.log("Ошибка поиска цемента по названию:", e)
         return ctx.reply("⚠️ Произошла ошибка. Попробуйте ещё раз.")
