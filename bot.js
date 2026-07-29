@@ -3,6 +3,7 @@ import { Telegraf, Markup } from "telegraf"
 import mongoose from "mongoose"
 import Order from "./models/Order.js"
 import Product from "./models/Product.js"
+import Category from "./models/category.js"
 import { checkProductStock, STOCK_STATUS } from "./services/stockCheck.js"
 
 console.log("SERVER URI:", process.env.MONGO_URI)
@@ -25,8 +26,6 @@ bot.command("id", (ctx) => {
 const userData = {}
 
 // Возвращает существующую сессию пользователя или создаёт новую с пустой корзиной.
-// Используется везде, где начинается выбор товара — чтобы НЕ терять уже
-// добавленные в корзину позиции.
 function getOrCreateUser(id) {
     if (!userData[id]) {
         userData[id] = { cart: [] }
@@ -37,53 +36,80 @@ function getOrCreateUser(id) {
     return userData[id]
 }
 
-// ⚠️ Цемент больше НЕ хардкодится здесь — цена и название берутся из
-// коллекции Product по коду (C01, C02, C03...). См. bot.hears("Цемент").
-// Краска пока остаётся хардкодом — это отдельная категория, ещё не
-// переведённая на единую систему товаров.
-const PRICES = {
-    "наружный краска": 800,
-    "внутренный краска": 1000
-}
-
-// ============================================================
-// КАТАЛОГ СУХИХ СМЕСЕЙ — по кодам (A01, A02...)
-// ⚠️ ЦЕНЫ НУЖНО ЗАПОЛНИТЬ — сейчас стоит null как заглушка.
-// Пока цена null, бот не даст оформить заказ на этот товар.
-// (Эта категория тоже пока не переведена на Product — в планах.)
-// ============================================================
-const DRY_MIX_CATALOG = {
-    A01: { name: "AlinEX Finish 25кг — шпатлёвка полимерная", price: null, unit: "мешок" },
-    A02: { name: "AlinEX Finish WP 25кг — шпатлёвка полимерная (влагостойкая)", price: null, unit: "мешок" },
-    A03: { name: "AlinEX Finish P-25кг — шпатлёвка полимерная, фасовка 1кг", price: null, unit: "пачка" },
-    A04: { name: "AlinEX Glat 1кг — шпатлёвка", price: null, unit: "пачка" },
-    A05: { name: "AlinEX Glat 25кг — шпатлёвка", price: null, unit: "мешок" },
-    A06: { name: "ВОЛМА ISKRIT 19кг — шпатлёвка финишная", price: null, unit: "мешок" },
-    A07: { name: "ВОЛМА Стандарт 20кг — шпатлёвка гипсовая", price: null, unit: "мешок" },
-    A08: { name: "AlinEX Grender 1кг — гипсовая штукатурка", price: null, unit: "пачка" },
-    A09: { name: "AlinEX Grender 30кг — гипсовая штукатурка", price: null, unit: "мешок" },
-    A10: { name: "AQNIET 2в1 25кг — гипсовая штукатурка", price: null, unit: "мешок" },
-    A11: { name: "AQNIET Универсальная 30кг — гипсовая штукатурка", price: null, unit: "мешок" },
-    A12: { name: "KNAUF Rotband 30кг — штукатурка гипсовая", price: null, unit: "мешок" },
-    A13: { name: "ВОЛМА Пласт 30кг — гипсовая штукатурка", price: null, unit: "мешок" },
-    A14: { name: "Гипс строительный GEX Г4 25кг (белый)", price: null, unit: "мешок" },
-    A15: { name: "Гипс строительный КазГипс 25кг", price: null, unit: "мешок" },
-    A16: { name: "AlinEX SET 301 25кг — клей для кафеля", price: null, unit: "мешок" },
-    A17: { name: "AQNIET EKONOM 25кг — клей для кафеля", price: null, unit: "мешок" },
-    A18: { name: "AQNIET 25кг — клей для кафеля", price: null, unit: "мешок" },
-    A19: { name: "AlinEX Joint 25кг — затирка для швов ГКЛ", price: null, unit: "мешок" },
-    A20: { name: "AQNIET Наливной пол 25кг", price: null, unit: "мешок" },
-    A21: { name: "ВОЛМА Нивилир экспресс 25кг — наливной пол", price: null, unit: "мешок" }
-}
-
-// Путь к PDF-каталогу на сервере — файл должен лежать в files/catalog_suhie_smesi.pdf
-const CATALOG_PATH = "./files/catalog_suhie_smesi.pdf"
+// Если товаров в категории не больше этого числа — показываем кнопки.
+// Если больше — присылаем текстовый список с кодами (чтобы не заваливать
+// клавиатуру десятками кнопок).
+const BUTTON_THRESHOLD = 8
 
 function generateOrderCode() {
     return Math.floor(1000 + Math.random() * 9000).toString()
 }
 
-const MAIN_MENU = Markup.keyboard([["Цемент", "Краска"], ["Сухие смеси"]]).resize()
+// ============================================================
+// ЕДИНАЯ СИСТЕМА ТОВАРОВ — всё берётся из базы (Category + Product),
+// хардкода цен/названий в этом файле больше нет.
+// ============================================================
+
+async function getCategories() {
+    return Category.find().sort({ name: 1 })
+}
+
+async function getProductsInCategory(categoryName) {
+    return Product.find({ category: categoryName }).sort({ name: 1 })
+}
+
+// Клавиатура главного меню — собирается из категорий в базе, по 2 в ряд
+async function mainMenuKeyboard() {
+    const categories = await getCategories()
+    const names = categories.map(c => c.name)
+
+    const rows = []
+    for (let i = 0; i < names.length; i += 2) {
+        rows.push(names.slice(i, i + 2))
+    }
+
+    return Markup.keyboard(rows).resize()
+}
+
+// Показывает товары выбранной категории — кнопками (если их немного)
+// или текстовым списком с кодами (если много)
+async function handleCategorySelected(ctx, user, categoryName) {
+    const products = await getProductsInCategory(categoryName)
+
+    if (products.length === 0) {
+        user.step = null
+        return ctx.reply(
+            "В этой категории сейчас нет товаров. Выберите другую категорию.",
+            await mainMenuKeyboard()
+        )
+    }
+
+    user.category = categoryName
+
+    if (products.length <= BUTTON_THRESHOLD) {
+        user.step = "product_select_button"
+
+        const buttons = products.map(p =>
+            [`${p.name} - ${p.price.toLocaleString("ru-RU")} тг`]
+        )
+
+        return ctx.reply(
+            `Выберите товар (${categoryName}):`,
+            Markup.keyboard(buttons).resize()
+        )
+    }
+
+    user.step = "product_select_code"
+
+    const list = products
+        .map(p => `${p.code || "—"} — ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}`)
+        .join("\n")
+
+    return ctx.reply(
+        `Товары категории «${categoryName}»:\n\n${list}\n\nОтправьте код нужного товара, например: ${products[0].code || "A01"}`,
+        Markup.removeKeyboard()
+    )
+}
 
 // Форматирует всю корзину: список товаров + общая сумма
 function formatCartSummary(user) {
@@ -114,6 +140,7 @@ async function addToCartAndAskMore(ctx, user) {
     delete user.price
     delete user.unit
     delete user.count
+    delete user.category
 
     user.step = "add_more"
 
@@ -147,7 +174,7 @@ async function handleStockCheck(ctx, user, requestedQty) {
         return ctx.reply(
             "⚠️ *Не удалось проверить наличие товара*\n\n" +
             "Попробуйте ещё раз через минуту или свяжитесь с менеджером.",
-            { parse_mode: "Markdown", ...MAIN_MENU }
+            { parse_mode: "Markdown", ...(await mainMenuKeyboard()) }
         )
     }
 
@@ -156,7 +183,7 @@ async function handleStockCheck(ctx, user, requestedQty) {
             "😔 *Данный товар временно закончился*\n\n" +
             "🚚 Мы уже везём новую партию — ожидайте поступления в ближайшее время!\n\n" +
             "Выберите другой товар или зайдите позже 👇",
-            { parse_mode: "Markdown", ...MAIN_MENU }
+            { parse_mode: "Markdown", ...(await mainMenuKeyboard()) }
         )
     }
 
@@ -189,129 +216,15 @@ async function handleStockCheck(ctx, user, requestedQty) {
 }
 
 // ---- START ----
-bot.start((ctx) => {
+bot.start(async (ctx) => {
     if (isChecksChat(ctx)) return ctx.reply("Этот чат только для чеков ✅")
 
     delete userData[ctx.from.id]
 
-    ctx.reply(
+    return ctx.reply(
         "Ернұржанға қош келдіңіз \nТоварды таңдаңыз:",
-        Markup.keyboard([["Цемент", "Краска"], ["Сухие смеси"]]).resize()
+        await mainMenuKeyboard()
     )
-})
-
-// ---- Выбор цемента — кнопки собираются динамически из базы (Product) ----
-bot.hears("Цемент", async (ctx) => {
-    if (isChecksChat(ctx)) return
-
-    let products = []
-    try {
-        products = await Product.find({ category: "Цемент" }).sort({ name: 1 })
-    } catch (e) {
-        console.log("Ошибка загрузки цемента из БД:", e)
-        return ctx.reply("⚠️ Не удалось загрузить список цемента. Попробуйте позже.")
-    }
-
-    if (products.length === 0) {
-        return ctx.reply("Сейчас нет доступных позиций цемента. Свяжитесь с менеджером.")
-    }
-
-    const buttons = products.map(p =>
-        [`${p.name} - ${p.price.toLocaleString("ru-RU")} тг`]
-    )
-
-    return ctx.reply(
-        "Выберите цемент:",
-        Markup.keyboard(buttons).resize()
-    )
-})
-
-// ---- Когда выбрали конкретный цемент кнопкой ----
-bot.hears(/^Цемент .+ - [\d\s]+ тг$/, async (ctx) => {
-    if (isChecksChat(ctx)) return
-
-    const text = ctx.message.text
-
-    // Убираем " - <цена> тг" в конце, чтобы получить чистое название товара
-    const productName = text.replace(/ - [\d\s]+ тг$/, "")
-
-    let product
-    try {
-        product = await Product.findOne({ name: productName, category: "Цемент" })
-    } catch (e) {
-        console.log("Ошибка поиска цемента по названию:", e)
-        return ctx.reply("⚠️ Произошла ошибка. Попробуйте ещё раз.")
-    }
-
-    if (!product) {
-        return ctx.reply("❌ Товар не найден. Попробуйте выбрать заново.", Markup.keyboard([["Цемент", "Краска"], ["Сухие смеси"]]).resize())
-    }
-
-    const user = getOrCreateUser(ctx.from.id)
-    user.product = product.name
-    user.price = product.price
-    user.unit = product.unit
-    user.step = "count"
-
-    return ctx.reply(
-        `Сколько нужно "${product.name}"?`,
-        Markup.removeKeyboard()
-    )
-})
-
-// ---- Выбор краски ----
-bot.hears("Краска", (ctx) => {
-    if (isChecksChat(ctx)) return
-    ctx.reply(
-        "Выберите тип краски:",
-        Markup.keyboard([["наружный - 800тг (1л)", "внутренный - 1000тг (1л)"]]).resize()
-    )
-})
-
-// ---- Выбор сухих смесей — отправляем каталог и ждём код товара ----
-bot.hears("Сухие смеси", async (ctx) => {
-    if (isChecksChat(ctx)) return
-
-    const user = getOrCreateUser(ctx.from.id)
-    user.step = "dry_mix_code"
-
-    try {
-        await ctx.replyWithDocument(
-            { source: CATALOG_PATH },
-            {
-                caption:
-                    "📖 Вот наш каталог сухих смесей.\n\n" +
-                    "Найдите нужный товар и отправьте его код в чат, например: A01"
-            }
-        )
-    } catch (e) {
-        console.log("Ошибка отправки каталога:", e)
-        await ctx.reply(
-            "📖 Каталог доступен у менеджера. Отправьте код нужного товара, например: A01"
-        )
-    }
-
-    return ctx.reply("Ожидаю код товара из каталога 👆", Markup.removeKeyboard())
-})
-
-// ---- Когда выбрали краску ----
-bot.hears(["наружный - 800тг (1л)", "внутренный - 1000тг (1л)"], (ctx) => {
-    if (isChecksChat(ctx)) return
-
-    const text = ctx.message.text
-    let product = ""
-
-    if (text.includes("наружный")) product = "наружный краска"
-    if (text.includes("внутренный")) product = "внутренный краска"
-
-    const user = getOrCreateUser(ctx.from.id)
-    user.product = product
-    user.fullText = text
-    user.price = PRICES[product]
-    user.unit = "банок"
-    user.step = "count"
-
-    ctx.reply(`Сколько ${text} нужно?`, Markup.removeKeyboard())
 })
 
 // ---- Фото (чек) ----
@@ -458,39 +371,75 @@ bot.on("text", async (ctx) => {
     const id = ctx.from.id
     const user = userData[id]
 
-    // ---- если заказа нет ----
-    if (!user) {
-        return ctx.reply(
-            "Выберите товар:",
-            Markup.keyboard([["Цемент", "Краска"], ["Сухие смеси"]]).resize()
-        )
+    // ---- Мы "в меню" — нет активной сессии, либо шаг сброшен (null) ----
+    // Проверяем, не является ли сообщение выбором категории.
+    if (!user || !user.step) {
+        const categories = await getCategories()
+        const match = categories.find(c => c.name === text)
+
+        if (match) {
+            const activeUser = getOrCreateUser(id)
+            return handleCategorySelected(ctx, activeUser, match.name)
+        }
+
+        return ctx.reply("Выберите товар:", await mainMenuKeyboard())
     }
 
-    // ---- код товара из каталога сухих смесей ----
-    if (user.step === "dry_mix_code") {
-        const code = text.toUpperCase()
-        const item = DRY_MIX_CATALOG[code]
+    // ---- выбор товара кнопкой (категория с небольшим числом позиций) ----
+    if (user.step === "product_select_button") {
+        const match = text.match(/^(.+) - [\d\s]+ тг$/)
 
-        if (!item) {
-            return ctx.reply(
-                "❌ Такого кода нет в каталоге.\n\n" +
-                "Проверьте код в PDF и отправьте его ещё раз, например: A01"
-            )
+        if (!match) {
+            return ctx.reply("Пожалуйста, выберите товар с помощью кнопок ниже.")
         }
 
-        if (item.price === null) {
-            return ctx.reply(
-                "⚠️ Этот товар временно недоступен для заказа онлайн.\n\n" +
-                "Свяжитесь с менеджером или выберите другой товар из каталога."
-            )
+        const productName = match[1]
+
+        let product
+        try {
+            product = await Product.findOne({ name: productName, category: user.category })
+        } catch (e) {
+            console.log("Ошибка поиска товара:", e)
+            return ctx.reply("⚠️ Произошла ошибка. Попробуйте ещё раз.")
         }
 
-        user.product = item.name
-        user.price = item.price
-        user.unit = item.unit
+        if (!product) {
+            return ctx.reply("❌ Товар не найден. Попробуйте выбрать заново.", await mainMenuKeyboard())
+        }
+
+        user.product = product.name
+        user.price = product.price
+        user.unit = product.unit
         user.step = "count"
 
-        return ctx.reply(`Сколько нужно "${item.name}"?`)
+        return ctx.reply(`Сколько нужно "${product.name}"?`, Markup.removeKeyboard())
+    }
+
+    // ---- выбор товара по коду (категория с большим числом позиций) ----
+    if (user.step === "product_select_code") {
+        const code = text.toUpperCase()
+
+        let product
+        try {
+            product = await Product.findOne({ code, category: user.category })
+        } catch (e) {
+            console.log("Ошибка поиска товара по коду:", e)
+            return ctx.reply("⚠️ Произошла ошибка. Попробуйте ещё раз.")
+        }
+
+        if (!product) {
+            return ctx.reply(
+                "❌ Такого кода нет.\n\n" +
+                "Проверьте код в списке выше и отправьте его ещё раз."
+            )
+        }
+
+        user.product = product.name
+        user.price = product.price
+        user.unit = product.unit
+        user.step = "count"
+
+        return ctx.reply(`Сколько нужно "${product.name}"?`)
     }
 
     // ---- количество + проверка остатков на складе ----
@@ -544,7 +493,7 @@ bot.on("text", async (ctx) => {
             delete userData[id]
             return ctx.reply(
                 "Заказ отменён. Выберите другой товар 👇",
-                MAIN_MENU
+                await mainMenuKeyboard()
             )
         }
 
@@ -555,7 +504,7 @@ bot.on("text", async (ctx) => {
     if (user.step === "add_more") {
         if (text.toLowerCase() === "да") {
             user.step = null
-            return ctx.reply("Выберите товар:", MAIN_MENU)
+            return ctx.reply("Выберите товар:", await mainMenuKeyboard())
         }
 
         if (text.toLowerCase() === "нет") {
@@ -582,7 +531,7 @@ bot.on("text", async (ctx) => {
             delete userData[id]
             return ctx.reply(
                 "Заказ отменен.",
-                Markup.keyboard([["Цемент", "Краска"], ["Сухие смеси"]]).resize()
+                await mainMenuKeyboard()
             )
         }
 
@@ -665,7 +614,7 @@ bot.on("text", async (ctx) => {
     }
 
     // ---- шаг не распознан ----
-    return ctx.reply("Выберите товар:", MAIN_MENU)
+    return ctx.reply("Выберите товар:", await mainMenuKeyboard())
 })
 
 bot.launch()
