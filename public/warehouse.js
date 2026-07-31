@@ -124,10 +124,11 @@
     els.tableCount.textContent = `Товары (${data.total.toLocaleString('ru-RU')})`;
 
     if (!data.items.length) {
-      els.tableBody.innerHTML = `<tr><td colspan="8"><div class="empty-state">Товары не найдены</div></td></tr>`;
+      els.tableBody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Товары не найдены</div></td></tr>`;
     } else {
       els.tableBody.innerHTML = data.items.map((p) => `
         <tr data-id="${p.id}">
+          <td>${p.code || '-'}</td>
           <td>${p.name}</td>
           <td>${p.category}</td>
           <td class="qty-${statusClass(p.status.code)}">${p.qty}</td>
@@ -201,6 +202,9 @@
     overlay.innerHTML = `
       <div class="modal">
         <h3>${isEdit ? 'Редактирование товара' : 'Добавить товар'}</h3>
+        <label>Код <span style="color:#999;font-weight:normal;">(необязательно — подставится автоматически)</span>
+          <input type="text" id="editCode" value="${product.code || ''}" placeholder="Например: C01">
+        </label>
         <label>Наименование
           <input type="text" id="editName" value="${product.name}">
         </label>
@@ -240,6 +244,7 @@
     overlay.querySelector('#editCancel').onclick = () => overlay.remove();
     overlay.querySelector('#editSave').onclick = async () => {
       const body = {
+        code: overlay.querySelector('#editCode').value.trim(),
         name: overlay.querySelector('#editName').value.trim(),
         category: overlay.querySelector('#editCategory').value.trim(),
         qty: Number(overlay.querySelector('#editQty').value),
@@ -369,7 +374,7 @@
 
   if (els.addProductBtn) {
     els.addProductBtn.addEventListener('click', () => {
-      openProductModal({ name: '', category: '', qty: 0, unit: '', price: 0 }, null);
+      openProductModal({ code: '', name: '', category: '', qty: 0, unit: '', price: 0 }, null);
     });
   }
 

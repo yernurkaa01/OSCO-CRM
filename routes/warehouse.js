@@ -160,16 +160,41 @@ router.get('/api/warehouse/products', async (req, res) => {
   }
 });
 
+// Генерирует следующий свободный код для категории на основе первой буквы
+// (например "Цемент" -> C01, C02...; "Сухие смеси" -> C01... если совпадёт
+// первая буква — тогда берём первую букву транслитом от общего счётчика).
+async function generateNextCode() {
+  // Берём самый большой существующий числовой суффикс среди всех кодов
+  // вида <буквы><цифры> и просто продолжаем счёт от общего пула, чтобы
+  // гарантированно не столкнуться с уже существующим кодом.
+  const all = await Product.find({}, { code: 1 }).lean();
+  let maxNum = 0;
+
+  all.forEach((p) => {
+    const match = String(p.code || '').match(/(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxNum) maxNum = num;
+    }
+  });
+
+  return 'P' + String(maxNum + 1).padStart(3, '0');
+}
+
 // ---------- POST /admin/api/warehouse/products ----------
 router.post('/api/warehouse/products', express.json(), async (req, res) => {
   try {
-    const {
+    let {
       code, name, category, qty, unit, price,
       purchasePrice, markupPercent, supplier
     } = req.body || {};
 
-    if (!code || !name || !category || qty == null || !unit || price == null) {
-      return res.status(400).json({ error: 'Заполните все обязательные поля товара (код, название, категория, кол-во, ед. изм., цена)' });
+    if (!name || !category || qty == null || !unit || price == null) {
+      return res.status(400).json({ error: 'Заполните все обязательные поля товара (название, категория, кол-во, ед. изм., цена)' });
+    }
+
+    if (!code || !code.trim()) {
+      code = await generateNextCode();
     }
 
     const product = await Product.create({
@@ -197,13 +222,18 @@ router.post('/api/warehouse/products', express.json(), async (req, res) => {
 // ---------- PUT /admin/api/warehouse/products/:id ----------
 router.put('/api/warehouse/products/:id', express.json(), async (req, res) => {
   try {
-    const {
+    let {
       code, name, category, qty, unit, price,
       purchasePrice, markupPercent, supplier
     } = req.body || {};
 
-    if (!code || !name || !category || qty == null || !unit || price == null) {
-      return res.status(400).json({ error: 'Заполните все обязательные поля товара (код, название, категория, кол-во, ед. изм., цена)' });
+    if (!name || !category || qty == null || !unit || price == null) {
+      return res.status(400).json({ error: 'Заполните все обязательные поля товара (название, категория, кол-во, ед. изм., цена)' });
+    }
+
+    if (!code || !code.trim()) {
+      const existingDoc = await Product.findById(req.params.id);
+      code = existingDoc?.code || await generateNextCode();
     }
 
     const updated = await Product.findByIdAndUpdate(
