@@ -19,7 +19,7 @@ import Log from "./models/Log.js"
 import clientsRouter from "./routes/clients.js"
 
 import warehouseApiRouter from "./routes/warehouse.js"
-import { decreaseStock } from "./services/stockCheck.js"
+import { finalizeStock, releaseStock, restockStock } from "./services/stockCheck.js"
 
 
 
@@ -260,7 +260,7 @@ app.get("/orders", checkAuth, async (req, res) => {
     const { date } = req.query
 
     let filter = {
-        status: { $ne: "ожидание" }
+        status: { $nin: ["ожидание", "резерв"] }
     }
 
     if (date) {
@@ -337,6 +337,9 @@ app.get("/receipt/:fileId", checkAuth, async (req, res) => {
 // ============================================================
 // CONFIRM ORDER
 // ============================================================
+// Резерв уже был захвачен ботом при подтверждении заказа клиентом.
+// Здесь мы превращаем этот резерв в постоянное списание (qty и
+// reservedQty уменьшаются одновременно через finalizeStock).
 
 app.post("/confirm-order/:id", checkAuth, async (req, res) => {
 
@@ -375,8 +378,8 @@ const telegramData = await telegramResponse.json()
 
 console.log(telegramData)
 
-    // ⬇️ Списываем товар со склада только сейчас, когда оплата реально подтверждена
-    await decreaseStock(order.product, order.count)
+    // ⬇️ Резерв превращается в постоянное списание (qty и reservedQty вместе)
+    await finalizeStock(order.product, order.count)
 
     await Order.findByIdAndUpdate(
         req.params.id,
@@ -404,6 +407,10 @@ console.log(telegramData)
 // =======================
 // REJECT ORDER
 // =======================
+// Заказ был в статусе "ожидание" — значит товар всё ещё зарезервирован
+// (reservedQty увеличен) с момента подтверждения корзины клиентом.
+// При отклонении нужно ОСВОБОДИТЬ этот резерв — товар возвращается
+// в доступный пул для других клиентов, физический qty не трогаем.
 app.post("/reject-order/:id", checkAuth, async (req, res) => {
 
     const order = await Order.findById(req.params.id)
@@ -414,6 +421,10 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
         })
     }
     console.log("REJECT ORDER:", order)
+
+    // ⬇️ Освобождаем резерв — товар снова доступен для покупки
+    await releaseStock(order.product, order.count)
+
     const telegramResponse = await fetch(
         `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
         {
@@ -470,6 +481,8 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
 // ============================================================
 // ISSUE ORDER
 // ============================================================
+// Товар уже списан в момент confirm-order (finalizeStock) — здесь
+// просто меняем статус, склад трогать не нужно.
 
 app.post("/issue-order/:id", checkAuth, async (req, res) => {
 
@@ -510,6 +523,10 @@ app.post("/issue-order/:id", checkAuth, async (req, res) => {
 // ============================================================
 // REFUND ORDER
 // ============================================================
+// Заказ уже был оплачен и списан (finalizeStock уменьшил и qty,
+// и reservedQty) — при возврате денег просто возвращаем физический
+// товар обратно на склад. reservedQty трогать не нужно, резерв уже
+// был снят при подтверждении оплаты.
 
 app.post("/refund-order/:id", checkAuth, async (req, res) => {
 
@@ -528,8 +545,8 @@ app.post("/refund-order/:id", checkAuth, async (req, res) => {
         }
     )
 
-    // ⬇️ При возврате товар возвращается обратно на склад
-    await decreaseStock(order.product, -order.count)
+    // ⬇️ Возвращаем физический товар на склад
+    await restockStock(order.product, order.count)
 
     await Log.create({
 

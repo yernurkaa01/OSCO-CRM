@@ -5,7 +5,12 @@ import Order from "./models/Order.js"
 import Product from "./models/Product.js"
 import Category from "./models/category.js"
 import { generateCatalogPdf } from "./services/generateCatalogPdf.js"
-import { checkProductStock, STOCK_STATUS } from "./services/stockCheck.js"
+import {
+    checkProductStock,
+    reserveStock,
+    releaseStock,
+    STOCK_STATUS
+} from "./services/stockCheck.js"
 
 console.log("SERVER URI:", process.env.MONGO_URI)
 mongoose.connect(process.env.MONGO_URI)
@@ -14,7 +19,17 @@ mongoose.connect(process.env.MONGO_URI)
 
 const bot = new Telegraf(process.env.BOT_TOKEN)
 
+// Ловим необработанные сетевые/прочие ошибки, чтобы временный сбой
+// (например, недоступность Telegram на секунду) не ронял весь процесс.
+process.on("unhandledRejection", (err) => {
+    console.error("⚠️ Необработанная ошибка (процесс продолжает работу):", err)
+})
+
 const CHECKS_CHAT_ID = "-5164072787"
+
+// Сколько времени даём клиенту на оплату и отправку чека после того, как
+// он подтвердил заказ (и товар был реально зарезервирован).
+const RESERVATION_TIMEOUT_MS = 10 * 60 * 1000 // 10 минут
 
 function isChecksChat(ctx) {
     return String(ctx.chat.id) === CHECKS_CHAT_ID
@@ -37,29 +52,20 @@ function getOrCreateUser(id) {
     return userData[id]
 }
 
-// Если товаров в категории не больше этого числа — показываем кнопки.
-// Если больше — присылаем текстовый список с кодами (чтобы не заваливать
-// клавиатуру десятками кнопок).
 const BUTTON_THRESHOLD = 8
 
 function generateOrderCode() {
     return Math.floor(1000 + Math.random() * 9000).toString()
 }
 
-// ============================================================
-// ЕДИНАЯ СИСТЕМА ТОВАРОВ — всё берётся из базы (Category + Product),
-// хардкода цен/названий в этом файле больше нет.
-// ============================================================
-
 async function getCategories() {
     return Category.find().sort({ name: 1 })
 }
 
 async function getProductsInCategory(categoryName) {
-    return Product.find({ category: categoryName }).sort({ name: 1 })
+    return Product.find({ category: categoryName }).sort({ code: 1 })
 }
 
-// Клавиатура главного меню — собирается из категорий в базе, по 2 в ряд
 async function mainMenuKeyboard() {
     const categories = await getCategories()
     const names = categories.map(c => c.name)
@@ -72,8 +78,6 @@ async function mainMenuKeyboard() {
     return Markup.keyboard(rows).resize()
 }
 
-// Показывает товары выбранной категории — кнопками (если их немного)
-// или текстовым списком с кодами (если много)
 async function handleCategorySelected(ctx, user, categoryName) {
     const products = await getProductsInCategory(categoryName)
 
@@ -116,7 +120,6 @@ async function handleCategorySelected(ctx, user, categoryName) {
     } catch (e) {
         console.log("Ошибка генерации PDF-каталога:", e)
 
-        // Резервный вариант — текстовый список, если PDF не сгенерировался
         const list = products
             .map(p => `${p.code || "—"} — ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}`)
             .join("\n")
@@ -143,8 +146,8 @@ function formatCartSummary(user) {
     return text
 }
 
-// Кладёт текущий выбранный товар в корзину, очищает "текущий товар"
-// и спрашивает, нужно ли добавить ещё один товар
+// Кладёт текущий выбранный товар в корзину (БЕЗ резервирования — это
+// просто сборка списка, резерв случится позже, при финальном подтверждении).
 async function addToCartAndAskMore(ctx, user) {
     user.cart.push({
         product: user.product,
@@ -170,7 +173,6 @@ async function addToCartAndAskMore(ctx, user) {
     )
 }
 
-// Финальное подтверждение всей корзины перед вводом имени
 async function proceedToOrderConfirm(ctx, user) {
     user.step = "confirm"
 
@@ -212,7 +214,7 @@ async function handleStockCheck(ctx, user, requestedQty) {
         return ctx.reply(
             `⚠️ *К сожалению, в таком количестве товара нет*\n\n` +
             `📦 Вы запросили: *${requestedQty}* ${unit}\n` +
-            `✅ Сейчас на складе: *${stock.availableQty}* ${unit}\n\n` +
+            `✅ Сейчас доступно: *${stock.availableQty}* ${unit}\n\n` +
             `Желаете оформить то, что есть?`,
             {
                 parse_mode: "Markdown",
@@ -226,10 +228,37 @@ async function handleStockCheck(ctx, user, requestedQty) {
         `✅ *Товар в наличии!*\n\n` +
         `📦 ${user.product}\n` +
         `🔢 Запрошено: *${requestedQty}* ${unit}\n` +
-        `🏭 На складе: *${stock.availableQty}* ${unit}`,
+        `🏭 Доступно: *${stock.availableQty}* ${unit}`,
         { parse_mode: "Markdown" }
     )
     return addToCartAndAskMore(ctx, user)
+}
+
+/**
+ * Пытается атомарно зарезервировать ВСЕ товары корзины разом.
+ * Если что-то не удалось — откатывает (освобождает) те позиции, которые
+ * уже успели зарезервироваться в этой попытке, и возвращает информацию
+ * о том, какой именно товар подвёл.
+ * @returns {Promise<{success: boolean, failedItem?: object}>}
+ */
+async function reserveCart(cart) {
+    const reserved = []
+
+    for (const item of cart) {
+        const ok = await reserveStock(item.product, item.count)
+
+        if (!ok) {
+            // Откатываем всё, что успели зарезервировать в этой попытке
+            for (const done of reserved) {
+                await releaseStock(done.product, done.count)
+            }
+            return { success: false, failedItem: item }
+        }
+
+        reserved.push(item)
+    }
+
+    return { success: true }
 }
 
 // ---- START ----
@@ -265,12 +294,21 @@ bot.on("document", async (ctx) => {
     const id = ctx.from.id
     const user = userData[id]
 
-    if (!user || user.step !== "check" || !user.cart || user.cart.length === 0) {
+    if (!user || user.step !== "check" || !user.orderCode) {
         return ctx.reply("Сначала оформите заказ и после оплаты отправьте чек.")
     }
 
+    // Проверяем, не истёк ли таймаут ожидания оплаты
+    if (!user.reservationExpiresAt || Date.now() > user.reservationExpiresAt) {
+        delete userData[id]
+        return ctx.reply(
+            "⏱️ К сожалению, время на оплату истекло, и резерв товара был снят.\n\n" +
+            "Пожалуйста, оформите заказ заново.",
+            await mainMenuKeyboard()
+        )
+    }
+
     try {
-        const code = generateOrderCode()
         const document = ctx.message.document
 
         const itemsList = user.cart
@@ -288,7 +326,7 @@ bot.on("document", async (ctx) => {
                 caption:
 `🧾 Новый чек (PDF)
 
-📦 Код: ${code}
+📦 Код: ${user.orderCode}
 👤 ${user.name}
 📞 ${user.phone}
 🏦 ${user.bank}
@@ -301,22 +339,19 @@ ${itemsList}
             }
         )
 
-        // Один заказ = несколько товаров, все делят один orderCode
-        for (const item of user.cart) {
-            await Order.create({
-                orderCode: code,
-                product: item.product,
-                count: item.count,
+        // Обновляем уже существующие (зарезервированные) заказы —
+        // не создаём новые, они были созданы в момент подтверждения корзины.
+        await Order.updateMany(
+            { orderCode: user.orderCode, telegramId: id, status: "резерв" },
+            {
                 name: user.name,
                 phone: user.phone,
                 username: user.username,
-                telegramId: id,
-                totalPrice: item.count * item.price,
-                receiptFileId: document.file_id,
                 paymentBank: user.bank,
+                receiptFileId: document.file_id,
                 status: "ожидание"
-            })
-        }
+            }
+        )
 
         await ctx.reply("✅ Чек получен. Ожидайте подтверждения оплаты.")
         delete userData[id]
@@ -361,16 +396,11 @@ bot.hears("✍️ Ввести вручную", (ctx) => {
     )
 })
 
-// ---- Валидация номера телефона ----
 function validatePhone(phone) {
     phone = phone.trim()
-
     if (!/^[\+\d]+$/.test(phone)) return null
-
     if (/^\+7\d{10}$/.test(phone)) return phone
-
     if (/^8\d{10}$/.test(phone)) return phone
-
     return null
 }
 
@@ -389,7 +419,6 @@ bot.on("text", async (ctx) => {
     const user = userData[id]
 
     // ---- Мы "в меню" — нет активной сессии, либо шаг сброшен (null) ----
-    // Проверяем, не является ли сообщение выбором категории.
     if (!user || !user.step) {
         const categories = await getCategories()
         const match = categories.find(c => c.name === text)
@@ -402,7 +431,7 @@ bot.on("text", async (ctx) => {
         return ctx.reply("Выберите товар:", await mainMenuKeyboard())
     }
 
-    // ---- выбор товара кнопкой (категория с небольшим числом позиций) ----
+    // ---- выбор товара кнопкой ----
     if (user.step === "product_select_button") {
         const match = text.match(/^(.+) - [\d\s]+ тг$/)
 
@@ -432,7 +461,7 @@ bot.on("text", async (ctx) => {
         return ctx.reply(`Сколько нужно "${product.name}"?`, Markup.removeKeyboard())
     }
 
-    // ---- выбор товара по коду (категория с большим числом позиций) ----
+    // ---- выбор товара по коду ----
     if (user.step === "product_select_code") {
         const code = text.toUpperCase()
 
@@ -459,7 +488,7 @@ bot.on("text", async (ctx) => {
         return ctx.reply(`Сколько нужно "${product.name}"?`)
     }
 
-    // ---- количество + проверка остатков на складе ----
+    // ---- количество (информационная проверка, БЕЗ резервирования) ----
     if (user.step === "count") {
         const count = Number(text)
 
@@ -477,7 +506,7 @@ bot.on("text", async (ctx) => {
         }
     }
 
-    // ---- частичное наличие: оформить доступное количество? ----
+    // ---- частичное наличие ----
     if (user.step === "partial_confirm") {
         const yes = ["✅ да, оформить", "да, оформить", "да"].includes(text.toLowerCase())
         const no = ["❌ нет, отменить", "нет, отменить", "нет"].includes(text.toLowerCase())
@@ -534,12 +563,53 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    // ---- подтверждение всего заказа ----
+    // ---- подтверждение всего заказа — ЗДЕСЬ ПРОИСХОДИТ РЕАЛЬНЫЙ РЕЗЕРВ ----
     if (user.step === "confirm") {
         if (text.toLowerCase() === "да") {
+            const reserveResult = await reserveCart(user.cart)
+
+            if (!reserveResult.success) {
+                const failedName = reserveResult.failedItem.product
+
+                // Убираем не получившийся товар из корзины
+                user.cart = user.cart.filter(item => item.product !== failedName)
+
+                await ctx.reply(
+                    `😔 К сожалению, товар "${failedName}" уже разобрали, пока вы оформляли заказ.\n\n` +
+                    `Он убран из корзины.`
+                )
+
+                if (user.cart.length > 0) {
+                    return proceedToOrderConfirm(ctx, user)
+                }
+
+                delete userData[id]
+                return ctx.reply(
+                    "В корзине больше нет товаров. Выберите заново 👇",
+                    await mainMenuKeyboard()
+                )
+            }
+
+            // Резерв успешен — создаём заказы в базе со статусом "резерв"
+            const orderCode = generateOrderCode()
+            user.orderCode = orderCode
+            user.reservationExpiresAt = Date.now() + RESERVATION_TIMEOUT_MS
+
+            for (const item of user.cart) {
+                await Order.create({
+                    orderCode,
+                    product: item.product,
+                    count: item.count,
+                    telegramId: id,
+                    totalPrice: item.count * item.price,
+                    status: "резерв"
+                })
+            }
+
             user.step = "name"
             return ctx.reply(
-                "Введите ваше имя:",
+                `✅ Заказ зарезервирован! У вас есть 10 минут, чтобы завершить оформление и оплату.\n\n` +
+                `Введите ваше имя:`,
                 Markup.removeKeyboard()
             )
         }
@@ -558,9 +628,7 @@ bot.on("text", async (ctx) => {
     // ---- имя ----
     if (user.step === "name") {
         if (!/^[а-яА-ЯёЁa-zA-ZқҚөӨһҺәӘіІңҢғҒүҮұҰ\s\-]{2,}$/.test(text)) {
-            return ctx.reply(
-                "❌ Введите корректное имя (только буквы)"
-            )
+            return ctx.reply("❌ Введите корректное имя (только буквы)")
         }
 
         user.name = text
@@ -592,10 +660,12 @@ bot.on("text", async (ctx) => {
         const bankMessage = text === "Kaspi Bank"
             ? `⏳ Мы выставим вам счет в приложении Kaspi Bank в течение минуты.\n\n` +
               `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.\n\n` +
-              `📄 После оплаты отправьте PDF чек в этот чат.`
+              `📄 После оплаты отправьте PDF чек в этот чат.\n\n` +
+              `⏱️ У вас есть 10 минут с момента подтверждения заказа.`
             : `⏳ Мы выставим вам счет в приложении Halyk Bank в течение минуты.\n\n` +
               `📱 Пожалуйста, перейдите в Halyk Homebank -> Платежи и оплатите его.\n\n` +
-              `📄 После оплаты отправьте PDF чек в этот чат.`
+              `📄 После оплаты отправьте PDF чек в этот чат.\n\n` +
+              `⏱️ У вас есть 10 минут с момента подтверждения заказа.`
 
         return ctx.reply(bankMessage, Markup.removeKeyboard())
     }
@@ -630,9 +700,51 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    // ---- шаг не распознан ----
     return ctx.reply("Выберите товар:", await mainMenuKeyboard())
 })
 
-bot.launch()
-console.log("Бот работает 🚀")
+// ============================================================
+// ФОНОВАЯ ОЧИСТКА ПРОСРОЧЕННЫХ РЕЗЕРВОВ
+// Раз в минуту ищем заказы в статусе "резерв", которые висят дольше
+// таймаута (клиент не успел оплатить), освобождаем резерв на складе
+// и помечаем заказ как отменённый по таймауту.
+// ============================================================
+async function releaseExpiredReservations() {
+    try {
+        const expiredBefore = new Date(Date.now() - RESERVATION_TIMEOUT_MS)
+
+        const expired = await Order.find({
+            status: "резерв",
+            createdAt: { $lt: expiredBefore }
+        })
+
+        for (const order of expired) {
+            await releaseStock(order.product, order.count)
+            await Order.findByIdAndUpdate(order._id, { status: "отменено (таймаут)" })
+            console.log(`⏱️ Резерв освобождён по таймауту: ${order.product} x${order.count} (заказ ${order.orderCode})`)
+        }
+    } catch (e) {
+        console.error("Ошибка очистки просроченных резервов:", e)
+    }
+}
+
+setInterval(releaseExpiredReservations, 60 * 1000)
+
+// ============================================================
+// ЗАПУСК БОТА С АВТОМАТИЧЕСКИМИ ПОВТОРНЫМИ ПОПЫТКАМИ
+// Если подключение к Telegram временно недоступно (сетевой сбой,
+// ETIMEDOUT и т.п.) — не роняем процесс насовсем, а пробуем снова
+// через паузу. Раньше bot.launch() падал один раз и бот оставался
+// мёртвым до следующего ручного деплоя.
+// ============================================================
+async function launchBotWithRetry(retryDelayMs = 10000) {
+    try {
+        await bot.launch()
+        console.log("Бот работает 🚀")
+    } catch (err) {
+        console.error("Не удалось запустить бота, повтор через", retryDelayMs / 1000, "сек:", err.message)
+        setTimeout(() => launchBotWithRetry(retryDelayMs), retryDelayMs)
+    }
+}
+
+launchBotWithRetry()

@@ -81,6 +81,12 @@
 
             <!-- Сюда JS вставляет карточки ожидающих заказов -->
             <div id="pending-container"></div>
+
+            <!-- Мониторинг активных резервов -- только просмотр, без действий.
+                 Показывает заказы, где товар уже зарезервирован, но клиент
+                 ещё не прислал чек (и сколько времени осталось до таймаута). -->
+            <h2 style="margin-top:24px;">Активные резервы</h2>
+            <div id="reserved-container"></div>
         </div>
 
     </div>
@@ -91,7 +97,7 @@
          ================================================ -->
     <div class="modal" id="detailsModal">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeDetails()">×</span>
+            <span class="close-btn" onclick="closeDetails()">x</span>
             <h2>Детали заказа</h2>
             <div id="detailsContent"></div>
         </div>
