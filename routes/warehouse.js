@@ -16,6 +16,7 @@ function serialize(doc) {
   const p = doc.toObject ? doc.toObject() : doc;
   return {
     id: p._id.toString(),
+    code: p.code,
     name: p.name,
     category: p.category,
     qty: p.qty,
@@ -23,6 +24,9 @@ function serialize(doc) {
     price: p.price,
     sum: p.qty * p.price,
     status: statusOf(p.qty),
+    purchasePrice: p.purchasePrice ?? null,
+    markupPercent: p.markupPercent ?? null,
+    supplier: p.supplier ?? null,
   };
 }
 
@@ -130,7 +134,12 @@ router.get('/api/warehouse/products', async (req, res) => {
 
     const filter = {};
     if (category && category !== 'all') filter.category = category;
-    if (search && search.trim()) filter.name = { $regex: search.trim(), $options: 'i' };
+    if (search && search.trim()) {
+      filter.$or = [
+        { name: { $regex: search.trim(), $options: 'i' } },
+        { code: { $regex: search.trim(), $options: 'i' } },
+      ];
+    }
 
     const total = await Product.countDocuments(filter);
     const docs = await Product.find(filter)
@@ -154,21 +163,32 @@ router.get('/api/warehouse/products', async (req, res) => {
 // ---------- POST /admin/api/warehouse/products ----------
 router.post('/api/warehouse/products', express.json(), async (req, res) => {
   try {
-    const { name, category, qty, unit, price } = req.body || {};
-    if (!name || !category || qty == null || !unit || price == null) {
-      return res.status(400).json({ error: 'Заполните все поля товара' });
+    const {
+      code, name, category, qty, unit, price,
+      purchasePrice, markupPercent, supplier
+    } = req.body || {};
+
+    if (!code || !name || !category || qty == null || !unit || price == null) {
+      return res.status(400).json({ error: 'Заполните все обязательные поля товара (код, название, категория, кол-во, ед. изм., цена)' });
     }
 
     const product = await Product.create({
+      code,
       name,
       category,
       qty: Number(qty),
       unit,
       price: Number(price),
+      purchasePrice: purchasePrice != null && purchasePrice !== '' ? Number(purchasePrice) : undefined,
+      markupPercent: markupPercent != null && markupPercent !== '' ? Number(markupPercent) : undefined,
+      supplier: supplier || undefined,
     });
 
     res.status(201).json(serialize(product));
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ error: `Товар с кодом "${req.body?.code}" уже существует` });
+    }
     console.error("WAREHOUSE create error:", err);
     res.status(500).json({ error: "Ошибка создания товара" });
   }
@@ -177,14 +197,28 @@ router.post('/api/warehouse/products', express.json(), async (req, res) => {
 // ---------- PUT /admin/api/warehouse/products/:id ----------
 router.put('/api/warehouse/products/:id', express.json(), async (req, res) => {
   try {
-    const { name, category, qty, unit, price } = req.body || {};
-    if (!name || !category || qty == null || !unit || price == null) {
-      return res.status(400).json({ error: 'Заполните все поля товара' });
+    const {
+      code, name, category, qty, unit, price,
+      purchasePrice, markupPercent, supplier
+    } = req.body || {};
+
+    if (!code || !name || !category || qty == null || !unit || price == null) {
+      return res.status(400).json({ error: 'Заполните все обязательные поля товара (код, название, категория, кол-во, ед. изм., цена)' });
     }
 
     const updated = await Product.findByIdAndUpdate(
       req.params.id,
-      { name, category, qty: Number(qty), unit, price: Number(price) },
+      {
+        code,
+        name,
+        category,
+        qty: Number(qty),
+        unit,
+        price: Number(price),
+        purchasePrice: purchasePrice != null && purchasePrice !== '' ? Number(purchasePrice) : undefined,
+        markupPercent: markupPercent != null && markupPercent !== '' ? Number(markupPercent) : undefined,
+        supplier: supplier || undefined,
+      },
       { new: true, runValidators: true }
     );
 
@@ -194,6 +228,9 @@ router.put('/api/warehouse/products/:id', express.json(), async (req, res) => {
 
     res.json(serialize(updated));
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ error: `Товар с кодом "${req.body?.code}" уже существует` });
+    }
     console.error("WAREHOUSE update error:", err);
     res.status(500).json({ error: "Ошибка обновления товара" });
   }

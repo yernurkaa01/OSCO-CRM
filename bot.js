@@ -4,6 +4,7 @@ import mongoose from "mongoose"
 import Order from "./models/Order.js"
 import Product from "./models/Product.js"
 import Category from "./models/category.js"
+import { generateCatalogPdf } from "./services/generateCatalogPdf.js"
 import { checkProductStock, STOCK_STATUS } from "./services/stockCheck.js"
 
 console.log("SERVER URI:", process.env.MONGO_URI)
@@ -101,14 +102,30 @@ async function handleCategorySelected(ctx, user, categoryName) {
 
     user.step = "product_select_code"
 
-    const list = products
-        .map(p => `${p.code || "—"} — ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}`)
-        .join("\n")
+    try {
+        const pdfBuffer = await generateCatalogPdf(categoryName, products)
 
-    return ctx.reply(
-        `Товары категории «${categoryName}»:\n\n${list}\n\nОтправьте код нужного товара, например: ${products[0].code || "A01"}`,
-        Markup.removeKeyboard()
-    )
+        return ctx.replyWithDocument(
+            { source: pdfBuffer, filename: `catalog_${categoryName}.pdf` },
+            {
+                caption:
+                    `📖 Каталог «${categoryName}» — актуальные цены и остатки.\n\n` +
+                    `Отправьте код нужного товара, например: ${products[0].code || "S01"}`
+            }
+        )
+    } catch (e) {
+        console.log("Ошибка генерации PDF-каталога:", e)
+
+        // Резервный вариант — текстовый список, если PDF не сгенерировался
+        const list = products
+            .map(p => `${p.code || "—"} — ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}`)
+            .join("\n")
+
+        return ctx.reply(
+            `Товары категории «${categoryName}»:\n\n${list}\n\nОтправьте код нужного товара, например: ${products[0].code || "A01"}`,
+            Markup.removeKeyboard()
+        )
+    }
 }
 
 // Форматирует всю корзину: список товаров + общая сумма

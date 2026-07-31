@@ -18,7 +18,7 @@ const productSchema = new mongoose.Schema(
 
         category: {
             type: String,
-            required: true // ключ категории, например "cement", "paint", "dry_mix"
+            required: true // ключ категории, например "Цемент", "Краска", "Сухие смеси"
         },
 
         qty: {
@@ -43,6 +43,30 @@ const productSchema = new mongoose.Schema(
             type: Number,
             required: true,
             default: 0
+            // Розничная цена — используется ботом и на сайте для продажи
+        },
+
+        // ------------------------------------------------------------
+        // Необязательные поля для управленческой аналитики (из 1С).
+        // На процесс заказа/остатков в боте НЕ влияют — используются
+        // только в админке для расчёта прибыли.
+        // ------------------------------------------------------------
+        purchasePrice: {
+            type: Number,
+            required: false
+            // Закупочная цена
+        },
+
+        markupPercent: {
+            type: Number,
+            required: false
+            // Наценка, %
+        },
+
+        supplier: {
+            type: String,
+            required: false,
+            trim: true
         }
     },
     {
