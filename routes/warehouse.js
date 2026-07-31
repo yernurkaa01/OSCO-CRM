@@ -160,25 +160,20 @@ router.get('/api/warehouse/products', async (req, res) => {
   }
 });
 
-// Генерирует следующий свободный код для категории на основе первой буквы
-// (например "Цемент" -> C01, C02...; "Сухие смеси" -> C01... если совпадёт
-// первая буква — тогда берём первую букву транслитом от общего счётчика).
+// Генерирует следующий свободный код вида P<число>.
 async function generateNextCode() {
-  // Берём самый большой существующий числовой суффикс среди всех кодов
-  // вида <буквы><цифры> и просто продолжаем счёт от общего пула, чтобы
-  // гарантированно не столкнуться с уже существующим кодом.
-  const all = await Product.find({}, { code: 1 }).lean();
-  let maxNum = 0;
+  const all = await Product.find({}, { code: 1 }).lean()
+  let maxNum = 0
 
   all.forEach((p) => {
-    const match = String(p.code || '').match(/(\d+)$/);
+    const match = String(p.code || '').match(/(\d+)$/)
     if (match) {
-      const num = parseInt(match[1], 10);
-      if (num > maxNum) maxNum = num;
+      const num = parseInt(match[1], 10)
+      if (num > maxNum) maxNum = num
     }
-  });
+  })
 
-  return 'P' + String(maxNum + 1).padStart(3, '0');
+  return 'P' + String(maxNum + 1).padStart(3, '0')
 }
 
 // ---------- POST /admin/api/warehouse/products ----------

@@ -242,7 +242,17 @@
     }
 
     overlay.querySelector('#editCancel').onclick = () => overlay.remove();
-    overlay.querySelector('#editSave').onclick = async () => {
+
+    const saveBtn = overlay.querySelector('#editSave');
+    let isSaving = false;
+
+    saveBtn.onclick = async () => {
+      if (isSaving) return; // защита от повторных кликов, пока идёт запрос
+      isSaving = true;
+      saveBtn.disabled = true;
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Сохранение…';
+
       const body = {
         code: overlay.querySelector('#editCode').value.trim(),
         name: overlay.querySelector('#editName').value.trim(),
@@ -254,28 +264,41 @@
 
       if (!body.category) {
         alert('Сначала добавьте хотя бы одну категорию через "Управление категориями"');
+        isSaving = false;
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalText;
         return;
       }
 
       const url = isEdit ? `${API}/products/${id}` : `${API}/products`;
       const method = isEdit ? 'PUT' : 'POST';
 
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Ошибка сохранения');
-        return;
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Ошибка сохранения');
+          isSaving = false;
+          saveBtn.disabled = false;
+          saveBtn.textContent = originalText;
+          return;
+        }
+
+        overlay.remove();
+        loadProducts();
+        loadStats();
+        loadCategories();
+      } catch (e) {
+        alert('Ошибка сети, попробуйте ещё раз');
+        isSaving = false;
+        saveBtn.disabled = false;
+        saveBtn.textContent = originalText;
       }
-
-      overlay.remove();
-      loadProducts();
-      loadStats();
-      loadCategories();
     };
   }
 
