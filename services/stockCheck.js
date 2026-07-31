@@ -88,16 +88,16 @@ export async function releaseStock(productName, qty) {
     try {
         await Product.updateOne(
             { name: productName },
-            [
-                {
-                    $set: {
-                        reservedQty: {
-                            $max: [0, { $subtract: ["$reservedQty", qty] }]
-                        }
-                    }
-                }
-            ]
+            { $inc: { reservedQty: -qty } }
         )
+
+        // Подстраховка: если из-за гонки/повторного вызова reservedQty
+        // ушёл в минус — поджимаем обратно к нулю.
+        await Product.updateOne(
+            { name: productName, reservedQty: { $lt: 0 } },
+            { $set: { reservedQty: 0 } }
+        )
+
         return true
 
     } catch (error) {
@@ -117,17 +117,15 @@ export async function finalizeStock(productName, qty) {
     try {
         await Product.updateOne(
             { name: productName },
-            [
-                {
-                    $set: {
-                        qty: { $subtract: ["$qty", qty] },
-                        reservedQty: {
-                            $max: [0, { $subtract: ["$reservedQty", qty] }]
-                        }
-                    }
-                }
-            ]
+            { $inc: { qty: -qty, reservedQty: -qty } }
         )
+
+        // Подстраховка от ухода в минус
+        await Product.updateOne(
+            { name: productName, reservedQty: { $lt: 0 } },
+            { $set: { reservedQty: 0 } }
+        )
+
         return true
 
     } catch (error) {
