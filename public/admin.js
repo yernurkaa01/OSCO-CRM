@@ -45,6 +45,11 @@ function statusClass(status) {
     if (status === "отклонено")
         return "status-rejected"
 
+    // Заказ, который клиент не успел оплатить за отведённое время —
+    // резерв товара был автоматически снят
+    if (status === "отменено (таймаут)")
+        return "status-rejected"
+
     return "status-pending"
 }
 
@@ -58,6 +63,9 @@ function rowClass(status) {
         return "row-issued"
 
     if (status === "отклонено")
+        return "row-rejected"
+
+    if (status === "отменено (таймаут)")
         return "row-rejected"
 
     return ""
@@ -99,9 +107,9 @@ function updateStats(orders) {
         o.status === "возврат"
     ).length
 
-    // Отклонённые
+    // Отклонённые (включая просроченные по таймауту)
     const rejected = orders.filter(o =>
-        o.status === "отклонено"
+        o.status === "отклонено" || o.status === "отменено (таймаут)"
     ).length
 
     document.getElementById("stat-total").innerText =
@@ -267,7 +275,10 @@ async function loadOrders() {
     renderOrders()
 }
 
-// Загружает ожидающие заказы и обновляет правую колонку
+// Загружает ожидающие заказы и обновляет правую колонку.
+// Заказы с несколькими товарами (один orderCode) группируются в ОДНУ
+// карточку со списком товаров, а не показываются отдельными карточками
+// на каждую позицию корзины.
 async function loadPendingOrders() {
     const res    = await fetch("/pending-orders")
     const orders = await res.json()
@@ -280,29 +291,44 @@ async function loadPendingOrders() {
     lastPendingCount = orders.length
     firstPendingLoad = false
 
+    // Группируем по orderCode — сохраняем порядок первого появления
+    const groups = new Map()
+    orders.forEach(o => {
+        if (!groups.has(o.orderCode)) {
+            groups.set(o.orderCode, [])
+        }
+        groups.get(o.orderCode).push(o)
+    })
+
     let content = ""
 
-    orders.forEach(o => {
+    groups.forEach(items => {
+        const first = items[0]
+        const totalSum = items.reduce((acc, o) => acc + Number(o.totalPrice || 0), 0)
+
+        const itemsList = items.map(o => `
+            <p style="margin:4px 0;"><b>${o.product}</b> — ${o.count} шт = ${formatPrice(o.totalPrice)}</p>
+        `).join("")
+
         content += `
             <div class="order-card">
-                <h3>Заказ #${o.orderCode}</h3>
-                <p><b>Товар:</b> ${o.product}</p>
-                <p><b>Кол-во:</b> ${o.count}</p>
-                <p><b>Сумма:</b> <span class="price">${formatPrice(o.totalPrice)}</span></p>
-                <p><b>Имя:</b> ${o.name || "-"}</p>
-                <p><b>Банк:</b> ${o.paymentBank || "-"}</p>
-                <p><b>Время:</b> ${new Date(o.createdAt).toLocaleTimeString()}</p>
+                <h3>Заказ #${first.orderCode}</h3>
+                ${itemsList}
+                <p><b>Итого:</b> <span class="price">${formatPrice(totalSum)}</span></p>
+                <p><b>Имя:</b> ${first.name || "-"}</p>
+                <p><b>Банк:</b> ${first.paymentBank || "-"}</p>
+                <p><b>Время:</b> ${new Date(first.createdAt).toLocaleTimeString()}</p>
                 <p><b>Статус:</b> <span class="status status-pending">ожидание</span></p>
-                ${o.receiptFileId ? `
+                ${first.receiptFileId ? `
 <p>
-    <a href="/receipt/${o.receiptFileId}" target="_blank">
+    <a href="/receipt/${first.receiptFileId}" target="_blank">
         📄 PDF чек
     </a>
 </p>
 ` : ""}
-                <button class="btn confirm" onclick="confirmOrder('${o._id}')">Оплачено</button>
-                <button class="btn reject"  onclick="rejectOrder('${o._id}')">Отклонить</button>
-                <button class="details-btn" onclick='showDetails(${JSON.stringify(o)})'>Подробнее</button>
+                <button class="btn confirm" onclick="confirmOrder('${first._id}')">Оплачено</button>
+                <button class="btn reject"  onclick="rejectOrder('${first._id}')">Отклонить</button>
+                <button class="details-btn" onclick='showDetails(${JSON.stringify(first)})'>Подробнее</button>
             </div>
         `
     })

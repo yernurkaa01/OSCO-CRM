@@ -198,6 +198,15 @@ async function handleStockCheck(ctx, user, requestedQty) {
     }
 
     if (stock.status === STOCK_STATUS.NOT_FOUND || stock.status === STOCK_STATUS.OUT_OF_STOCK) {
+        // Важно: сбрасываем текущий выбор товара и шаг — иначе бот
+        // "застревал" на шаге ввода количества и не понимал следующее
+        // сообщение клиента (например, новый выбор категории).
+        delete user.product
+        delete user.price
+        delete user.unit
+        delete user.count
+        user.step = null
+
         return ctx.reply(
             "😔 *Данный товар временно закончился*\n\n" +
             "🚚 Мы уже везём новую партию — ожидайте поступления в ближайшее время!\n\n" +
