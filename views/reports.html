@@ -87,6 +87,9 @@
             <h2>Продано по товарам</h2>
             <div class="table-controls">
                 <input type="text" id="searchInput" class="search-box-r" placeholder="Поиск товара">
+                <select id="categorySelect" class="sort-select-r">
+                    <option value="all">Все категории</option>
+                </select>
                 <select id="sortSelect" class="sort-select-r">
                     <option value="count">По количеству</option>
                     <option value="sum">По выручке</option>
@@ -95,19 +98,29 @@
             </div>
         </div>
 
+        <div class="category-leader" id="categoryLeader" style="display:none;"></div>
+
         <table class="reports-table">
             <thead>
                 <tr>
                     <th>Товар</th>
                     <th>Категория</th>
-                    <th>Количество</th>
+                    <th>Продано</th>
+                    <th>Заказов</th>
+                    <th>Средняя цена</th>
                     <th>Выручка</th>
+                    <th>Доля</th>
                 </tr>
             </thead>
             <tbody id="reportBody">
-                <tr><td colspan="4" class="empty-row">Загрузка...</td></tr>
+                <tr><td colspan="7" class="empty-row">Загрузка...</td></tr>
             </tbody>
         </table>
+
+        <div class="table-footer-r">
+            <span id="footerInfo"></span>
+            <div class="pagination-r" id="pagination"></div>
+        </div>
     </div>
 
 </div>
