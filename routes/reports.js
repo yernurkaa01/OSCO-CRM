@@ -4,15 +4,11 @@ import Product from "../models/Product.js";
 
 const router = express.Router();
 
-// Считаем "продано" — заказы в статусе "оплачено" или "выдано"
-// (деньги реально получены, товар оплачен клиентом)
 const SOLD_STATUSES = ["оплачено", "выдано"];
 
 function getDateRange(period, fromParam, toParam) {
     const now = new Date();
 
-    // Произвольный диапазон дат (или одна конкретная дата) — приоритет
-    // выше, чем быстрые кнопки "Сегодня/Неделя/Месяц"
     if (fromParam) {
         const from = new Date(fromParam + "T00:00:00");
         const to = toParam ? new Date(toParam + "T23:59:59") : new Date(fromParam + "T23:59:59");
@@ -20,8 +16,7 @@ function getDateRange(period, fromParam, toParam) {
     }
 
     if (period === "week") {
-        // Строго календарная неделя: с понедельника 00:00 по сейчас
-        const day = now.getDay(); // 0 = воскресенье, 1 = понедельник ... 6 = суббота
+        const day = now.getDay();
         const diffToMonday = (day === 0 ? -6 : 1) - day;
         const from = new Date(now);
         from.setDate(now.getDate() + diffToMonday);
@@ -30,38 +25,43 @@ function getDateRange(period, fromParam, toParam) {
     }
 
     if (period === "month") {
-        // Строго календарный месяц: с 1 числа 00:00 по сейчас
         const from = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
         return { from, to: now };
     }
 
-    // "today" — с начала текущих суток по сейчас
     const from = new Date(now);
     from.setHours(0, 0, 0, 0);
     return { from, to: now };
 }
 
-// ---------- GET /admin/api/reports/sales?period=today|week|month  ----------
-// ---------- ИЛИ ?date=YYYY-MM-DD  ИЛИ  ?from=YYYY-MM-DD&to=YYYY-MM-DD ----------
+function toDateKey(d) {
+    return new Date(d).toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function formatDayLabel(dateKey) {
+    const [, m, d] = dateKey.split("-");
+    return `${d}.${m}`;
+}
+
 router.get('/api/reports/sales', async (req, res) => {
     try {
         const period = ["today", "week", "month"].includes(req.query.period)
             ? req.query.period
             : "today";
 
-        // ?date=... — короткая форма для одного конкретного дня
         const fromParam = req.query.date || req.query.from || null;
         const toParam = req.query.date || req.query.to || null;
 
         const { from, to } = getDateRange(period, fromParam, toParam);
 
+        const matchStage = {
+            status: { $in: SOLD_STATUSES },
+            createdAt: { $gte: from, $lte: to }
+        };
+
+        // ---- Продано по товарам ----
         const sold = await Order.aggregate([
-            {
-                $match: {
-                    status: { $in: SOLD_STATUSES },
-                    createdAt: { $gte: from, $lte: to }
-                }
-            },
+            { $match: matchStage },
             {
                 $group: {
                     _id: "$product",
@@ -73,32 +73,111 @@ router.get('/api/reports/sales', async (req, res) => {
             { $sort: { totalCount: -1 } }
         ]);
 
-        // Подтягиваем единицу измерения по названию товара из склада
         const productNames = sold.map(s => s._id);
         const products = await Product.find(
             { name: { $in: productNames } },
-            { name: 1, unit: 1 }
+            { name: 1, unit: 1, category: 1 }
         );
 
-        const unitByName = {};
-        products.forEach(p => { unitByName[p.name] = p.unit; });
+        const infoByName = {};
+        products.forEach(p => { infoByName[p.name] = { unit: p.unit, category: p.category }; });
 
         const items = sold.map(s => ({
             product: s._id,
-            unit: unitByName[s._id] || "-",
+            unit: infoByName[s._id]?.unit || "-",
+            category: infoByName[s._id]?.category || "Другое",
             totalCount: s.totalCount,
             totalSum: s.totalSum,
             orders: s.orders
         }));
 
         const grandTotal = items.reduce((acc, i) => acc + i.totalSum, 0);
+        const totalQtySold = items.reduce((acc, i) => acc + i.totalCount, 0);
+
+        // ---- Уникальные заказы (по orderCode) и средний чек ----
+        const distinctOrderCodesAgg = await Order.aggregate([
+            { $match: matchStage },
+            { $group: { _id: "$orderCode", sum: { $sum: "$totalPrice" } } }
+        ]);
+        const distinctOrders = distinctOrderCodesAgg.length;
+        const avgCheck = distinctOrders > 0 ? Math.round(grandTotal / distinctOrders) : 0;
+
+        // ---- Продажи по дням (для графика) ----
+        const dailyAgg = await Order.aggregate([
+            { $match: matchStage },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    revenue: { $sum: "$totalPrice" }
+                }
+            }
+        ]);
+        const dailyMap = {};
+        dailyAgg.forEach(d => { dailyMap[d._id] = d.revenue; });
+
+        // Заполняем все дни диапазона (включая нулевые), чтобы график был непрерывным
+        const dailyBreakdown = [];
+        const cursor = new Date(from);
+        cursor.setHours(0, 0, 0, 0);
+        const lastDay = new Date(to);
+        lastDay.setHours(0, 0, 0, 0);
+
+        while (cursor <= lastDay) {
+            const key = toDateKey(cursor);
+            dailyBreakdown.push({
+                date: key,
+                label: formatDayLabel(key),
+                revenue: dailyMap[key] || 0
+            });
+            cursor.setDate(cursor.getDate() + 1);
+        }
+
+        // ---- Разбивка по категориям (топ-3 + "Другое") ----
+        const categoryTotals = {};
+        items.forEach(i => {
+            categoryTotals[i.category] = (categoryTotals[i.category] || 0) + i.totalSum;
+        });
+
+        const categoryEntries = Object.entries(categoryTotals)
+            .sort((a, b) => b[1] - a[1]);
+
+        let categoryBreakdown;
+        if (categoryEntries.length <= 4) {
+            categoryBreakdown = categoryEntries.map(([category, sum]) => ({
+                category,
+                sum,
+                percent: grandTotal > 0 ? Math.round((sum / grandTotal) * 100) : 0
+            }));
+        } else {
+            const top = categoryEntries.slice(0, 3);
+            const rest = categoryEntries.slice(3);
+            const restSum = rest.reduce((acc, [, s]) => acc + s, 0);
+
+            categoryBreakdown = [
+                ...top.map(([category, sum]) => ({
+                    category,
+                    sum,
+                    percent: grandTotal > 0 ? Math.round((sum / grandTotal) * 100) : 0
+                })),
+                {
+                    category: "Другое",
+                    sum: restSum,
+                    percent: grandTotal > 0 ? Math.round((restSum / grandTotal) * 100) : 0
+                }
+            ];
+        }
 
         res.json({
             period,
             from,
             to,
             items,
-            grandTotal
+            grandTotal,
+            totalQtySold,
+            distinctOrders,
+            avgCheck,
+            dailyBreakdown,
+            categoryBreakdown
         });
 
     } catch (err) {
