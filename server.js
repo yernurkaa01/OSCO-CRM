@@ -601,14 +601,25 @@ app.post("/update-comment/:id", checkAuth, async (req, res) => {
 
     try {
 
-        await Order.findByIdAndUpdate(
+        const order = await Order.findById(req.params.id)
 
-            req.params.id,
+        if (!order) {
+            return res.status(404).json({
+                error: "Заказ не найден"
+            })
+        }
 
+        // Комментарий относится ко всему заказу клиента, а не к одной
+        // конкретной позиции — сохраняем его сразу во все товары
+        // с тем же orderCode, чтобы он был виден в "Подробнее" на любом из них.
+        await Order.updateMany(
+            {
+                orderCode: order.orderCode,
+                telegramId: order.telegramId
+            },
             {
                 comment: req.body.comment
             }
-
         )
 
         res.json({
