@@ -36,6 +36,9 @@
     <a class="nav-link" href="/admin/warehouse">
         📦 Склад
     </a>
+    <a class="nav-link" href="/admin/reports">
+        📊 Отчёты
+    </a>
     <a class="nav-link logout-link" href="/logout">
     Выйти
     </a>
@@ -81,12 +84,6 @@
 
             <!-- Сюда JS вставляет карточки ожидающих заказов -->
             <div id="pending-container"></div>
-
-            <!-- Мониторинг активных резервов -- только просмотр, без действий.
-                 Показывает заказы, где товар уже зарезервирован, но клиент
-                 ещё не прислал чек (и сколько времени осталось до таймаута). -->
-            <h2 style="margin-top:24px;">Активные резервы</h2>
-            <div id="reserved-container"></div>
         </div>
 
     </div>

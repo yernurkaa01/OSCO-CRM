@@ -371,6 +371,14 @@ bot.on("contact", (ctx) => {
 
     if (!user || user.step !== "phone_choice") return
 
+    if (user.reservationExpiresAt && Date.now() > user.reservationExpiresAt) {
+        delete userData[id]
+        return ctx.reply(
+            "⏱️ К сожалению, время на оформление заказа истекло, и резерв товара был снят.\n\n" +
+            "Пожалуйста, оформите заказ заново."
+        )
+    }
+
     user.phone = ctx.message.contact.phone_number
     user.username = ctx.from.username || ""
     user.step = "bank_choice"
@@ -429,6 +437,21 @@ bot.on("text", async (ctx) => {
         }
 
         return ctx.reply("Выберите товар:", await mainMenuKeyboard())
+    }
+
+    // ---- Проверка истечения резерва — на ЛЮБОМ шаге после подтверждения
+    // корзины (имя, телефон, банк, чек). Если время вышло, фоновая задача
+    // уже освободила резерв в базе — сообщаем клиенту и сбрасываем сессию,
+    // чтобы бот не продолжал вести его дальше по "мёртвому" заказу.
+    const STEPS_AFTER_RESERVATION = ["name", "phone_choice", "phone_manual", "bank_choice", "check"]
+
+    if (STEPS_AFTER_RESERVATION.includes(user.step) && user.reservationExpiresAt && Date.now() > user.reservationExpiresAt) {
+        delete userData[id]
+        return ctx.reply(
+            "⏱️ К сожалению, время на оформление заказа истекло, и резерв товара был снят.\n\n" +
+            "Пожалуйста, оформите заказ заново.",
+            await mainMenuKeyboard()
+        )
     }
 
     // ---- выбор товара кнопкой ----
@@ -660,12 +683,10 @@ bot.on("text", async (ctx) => {
         const bankMessage = text === "Kaspi Bank"
             ? `⏳ Мы выставим вам счет в приложении Kaspi Bank в течение минуты.\n\n` +
               `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.\n\n` +
-              `📄 После оплаты отправьте PDF чек в этот чат.\n\n` +
-              `⏱️ У вас есть 10 минут с момента подтверждения заказа.`
+              `📄 После оплаты отправьте PDF чек в этот чат.`
             : `⏳ Мы выставим вам счет в приложении Halyk Bank в течение минуты.\n\n` +
               `📱 Пожалуйста, перейдите в Halyk Homebank -> Платежи и оплатите его.\n\n` +
-              `📄 После оплаты отправьте PDF чек в этот чат.\n\n` +
-              `⏱️ У вас есть 10 минут с момента подтверждения заказа.`
+              `📄 После оплаты отправьте PDF чек в этот чат.`
 
         return ctx.reply(bankMessage, Markup.removeKeyboard())
     }
@@ -718,10 +739,42 @@ async function releaseExpiredReservations() {
             createdAt: { $lt: expiredBefore }
         })
 
+        // Группируем по (telegramId + orderCode), чтобы отправить клиенту
+        // ОДНО уведомление на весь заказ, а не по одному на каждый товар в корзине.
+        const groups = new Map()
+
         for (const order of expired) {
             await releaseStock(order.product, order.count)
             await Order.findByIdAndUpdate(order._id, { status: "отменено (таймаут)" })
             console.log(`⏱️ Резерв освобождён по таймауту: ${order.product} x${order.count} (заказ ${order.orderCode})`)
+
+            const key = `${order.telegramId}_${order.orderCode}`
+            if (!groups.has(key)) {
+                groups.set(key, { telegramId: order.telegramId, orderCode: order.orderCode })
+            }
+        }
+
+        // Проактивно уведомляем каждого клиента СРАЗУ в момент истечения,
+        // не дожидаясь, пока он сам что-то напишет (чтобы он не успел
+        // оплатить резерв, который уже снят).
+        for (const { telegramId, orderCode } of groups.values()) {
+            try {
+                await bot.telegram.sendMessage(
+                    telegramId,
+                    `⏱️ Время на оплату заказа (код ${orderCode}) истекло, и резерв товара был автоматически снят.\n\n` +
+                    `Если вы уже оплатили — пожалуйста, всё равно отправьте чек, мы разберёмся вручную.\n` +
+                    `Если ещё не оплачивали — оформите заказ заново, нажав /start.`
+                )
+            } catch (e) {
+                console.log(`Не удалось уведомить клиента ${telegramId} об истечении резерва:`, e.message)
+            }
+
+            // Сбрасываем сессию клиента ТОЛЬКО если он всё ещё на этом же
+            // заказе (не трогаем, если он уже начал новый заказ заново)
+            const session = userData[telegramId]
+            if (session && session.orderCode === orderCode) {
+                delete userData[telegramId]
+            }
         }
     } catch (e) {
         console.error("Ошибка очистки просроченных резервов:", e)

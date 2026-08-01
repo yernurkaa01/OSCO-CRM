@@ -19,6 +19,7 @@ import Log from "./models/Log.js"
 import clientsRouter from "./routes/clients.js"
 
 import warehouseApiRouter from "./routes/warehouse.js"
+import reportsApiRouter from "./routes/reports.js"
 import { finalizeStock, releaseStock, restockStock } from "./services/stockCheck.js"
 
 
@@ -743,10 +744,30 @@ app.get("/admin/warehouse", checkAuth, ownerOnly, (req, res) => {
 
 
 // ============================================================
+// REPORTS PAGE
+// ============================================================
+
+app.get("/admin/reports", checkAuth, ownerOnly, (req, res) => {
+
+    res.sendFile(
+        path.join(__dirname, "views", "reports.html")
+    )
+
+})
+
+
+// ============================================================
 // WAREHOUSE API
 // ============================================================
 
 app.use("/admin", checkAuth, ownerOnly, warehouseApiRouter)
+
+
+// ============================================================
+// REPORTS API
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, reportsApiRouter)
 
 
 // ============================================================
