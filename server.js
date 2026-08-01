@@ -516,18 +516,25 @@ app.post("/issue-order/:id", checkAuth, async (req, res) => {
         })
     }
 
-    await Order.findByIdAndUpdate(
-        req.params.id,
-        {
-            status: "выдано"
-        }
-    )
+    // Находим ВСЕ товары этого заказа (делят один orderCode) и выдаём
+    // разом — одним кликом на любой строке, а не по одной позиции.
+    const siblingOrders = await Order.find({
+        orderCode: order.orderCode,
+        telegramId: order.telegramId,
+        status: "оплачено"
+    })
+
+    const ordersToIssue = siblingOrders.length ? siblingOrders : [order]
+
+    for (const o of ordersToIssue) {
+        await Order.findByIdAndUpdate(o._id, { status: "выдано" })
+    }
 
     await Log.create({
 
         user: req.session.user.username,
 
-        action: "Выдал заказ",
+        action: `Выдал заказ (${ordersToIssue.length} поз.)`,
 
         orderId: order.orderCode
 
@@ -670,7 +677,7 @@ app.post("/save-client", async (req, res) => {
 
             {
                 upsert: true,
-                new: true
+                returnDocument: "after"
             }
 
         )
