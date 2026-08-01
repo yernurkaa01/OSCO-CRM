@@ -72,10 +72,21 @@
             `${leader.totalCount} ${leader.unit} · <span class="leader-money">${formatMoney(leader.totalSum)}</span>`;
     }
 
+    function computeTop5Ids(items) {
+        // Топ-5 определяем по факту продаж (количество, выручка как
+        // tie-breaker) — независимо от текущей сортировки/поиска в таблице.
+        const ranked = items.slice().sort((a, b) => {
+            if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
+            return b.totalSum - a.totalSum;
+        });
+        return new Set(ranked.slice(0, 5).map(i => i.product));
+    }
+
     function renderTable() {
         renderCategoryLeader();
 
         const filtered = getFilteredSorted();
+        const top5Ids = computeTop5Ids(filtered);
         const totalPages = Math.max(Math.ceil(filtered.length / PAGE_SIZE), 1);
 
         if (currentPage > totalPages) currentPage = totalPages;
@@ -85,19 +96,22 @@
 
         if (!filtered.length) {
             document.getElementById('reportBody').innerHTML =
-                '<tr><td colspan="7" class="empty-row">Ничего не найдено</td></tr>';
+                '<tr><td colspan="8" class="empty-row">Ничего не найдено</td></tr>';
             document.getElementById('footerInfo').textContent = 'Показано 0 из 0 товаров';
             document.getElementById('pagination').innerHTML = '';
             return;
         }
 
-        document.getElementById('reportBody').innerHTML = pageItems.map(item => {
+        document.getElementById('reportBody').innerHTML = pageItems.map((item, i) => {
             const avgPrice = item.totalCount > 0 ? Math.round(item.totalSum / item.totalCount) : 0;
             const share = grandTotalValue > 0 ? ((item.totalSum / grandTotalValue) * 100).toFixed(1) : '0.0';
+            const rowNumber = start + i + 1;
+            const isTop5 = top5Ids.has(item.product);
 
             return `
-                <tr>
-                    <td>${item.product}</td>
+                <tr class="${isTop5 ? 'top5-row' : ''}">
+                    <td class="row-number">${rowNumber}</td>
+                    <td>${isTop5 ? '<span class="top5-badge">ТОП</span>' : ''}${item.product}</td>
                     <td>${item.category}</td>
                     <td>${item.totalCount} ${item.unit}</td>
                     <td>${item.orders}</td>

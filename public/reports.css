@@ -298,3 +298,25 @@ table.reports-table .empty-row {
   color: #1a9d52;
   font-weight: 600;
 }
+
+/* --- Топ-5 товаров --- */
+tr.top5-row {
+  background: #fff8e6;
+}
+
+.row-number {
+  color: #8a8f98;
+  font-variant-numeric: tabular-nums;
+}
+
+.top5-badge {
+  display: inline-block;
+  background: #f5a623;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
