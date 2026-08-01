@@ -57,7 +57,17 @@
             return;
         }
 
-        const leader = categoryItems.slice().sort((a, b) => b.totalCount - a.totalCount)[0];
+        const sortBy = document.getElementById('sortSelect').value;
+
+        const leader = categoryItems.slice().sort((a, b) => {
+            if (sortBy === 'sum') return b.totalSum - a.totalSum;
+            if (sortBy === 'name') return a.product.localeCompare(b.product, 'ru');
+
+            // "По количеству" (и по умолчанию): сначала по количеству,
+            // при равенстве — по выручке (чтобы не выбирать лидера случайно)
+            if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
+            return b.totalSum - a.totalSum;
+        })[0];
 
         banner.style.display = 'flex';
         banner.innerHTML =
