@@ -57,14 +57,11 @@
             return;
         }
 
-        const sortBy = document.getElementById('sortSelect').value;
-
+        // Лидер всегда считается по факту продаж (количество, затем выручка
+        // как tie-breaker) — независимо от того, как отсортирована таблица
+        // для отображения (иначе при "По названию" лидером бы становился
+        // просто первый по алфавиту товар).
         const leader = categoryItems.slice().sort((a, b) => {
-            if (sortBy === 'sum') return b.totalSum - a.totalSum;
-            if (sortBy === 'name') return a.product.localeCompare(b.product, 'ru');
-
-            // "По количеству" (и по умолчанию): сначала по количеству,
-            // при равенстве — по выручке (чтобы не выбирать лидера случайно)
             if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
             return b.totalSum - a.totalSum;
         })[0];
