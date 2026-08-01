@@ -66,13 +66,20 @@ async function getProductsInCategory(categoryName) {
     return Product.find({ category: categoryName }).sort({ code: 1 })
 }
 
-async function mainMenuKeyboard() {
+async function mainMenuKeyboard(user) {
     const categories = await getCategories()
     const names = categories.map(c => c.name)
 
     const rows = []
     for (let i = 0; i < names.length; i += 2) {
         rows.push(names.slice(i, i + 2))
+    }
+
+    // Если в корзине уже есть товары — даём возможность в любой момент
+    // перейти к оформлению, не заставляя обязательно выбирать ещё один
+    // товар (например, если нужной категории/товара сейчас нет).
+    if (user && user.cart && user.cart.length > 0) {
+        rows.push(["✅ Оформить заказ"])
     }
 
     return Markup.keyboard(rows).resize()
@@ -85,7 +92,7 @@ async function handleCategorySelected(ctx, user, categoryName) {
         user.step = null
         return ctx.reply(
             "В этой категории сейчас нет товаров. Выберите другую категорию.",
-            await mainMenuKeyboard()
+            await mainMenuKeyboard(user)
         )
     }
 
@@ -193,7 +200,7 @@ async function handleStockCheck(ctx, user, requestedQty) {
         return ctx.reply(
             "⚠️ *Не удалось проверить наличие товара*\n\n" +
             "Попробуйте ещё раз через минуту или свяжитесь с менеджером.",
-            { parse_mode: "Markdown", ...(await mainMenuKeyboard()) }
+            { parse_mode: "Markdown", ...(await mainMenuKeyboard(user)) }
         )
     }
 
@@ -211,7 +218,7 @@ async function handleStockCheck(ctx, user, requestedQty) {
             "😔 *Данный товар временно закончился*\n\n" +
             "🚚 Мы уже везём новую партию — ожидайте поступления в ближайшее время!\n\n" +
             "Выберите другой товар или зайдите позже 👇",
-            { parse_mode: "Markdown", ...(await mainMenuKeyboard()) }
+            { parse_mode: "Markdown", ...(await mainMenuKeyboard(user)) }
         )
     }
 
@@ -437,6 +444,13 @@ bot.on("text", async (ctx) => {
 
     // ---- Мы "в меню" — нет активной сессии, либо шаг сброшен (null) ----
     if (!user || !user.step) {
+        // Аварийный выход: если в корзине уже есть товары, клиент может
+        // в любой момент перейти к оформлению, не выбирая ещё один товар
+        // (например, если нужной категории сейчас нет в наличии).
+        if (user && user.cart && user.cart.length > 0 && text === "✅ Оформить заказ") {
+            return proceedToOrderConfirm(ctx, user)
+        }
+
         const categories = await getCategories()
         const match = categories.find(c => c.name === text)
 
@@ -445,7 +459,7 @@ bot.on("text", async (ctx) => {
             return handleCategorySelected(ctx, activeUser, match.name)
         }
 
-        return ctx.reply("Выберите товар:", await mainMenuKeyboard())
+        return ctx.reply("Выберите товар:", await mainMenuKeyboard(user))
     }
 
     // ---- Проверка истечения резерва — на ЛЮБОМ шаге после подтверждения
@@ -482,7 +496,7 @@ bot.on("text", async (ctx) => {
         }
 
         if (!product) {
-            return ctx.reply("❌ Товар не найден. Попробуйте выбрать заново.", await mainMenuKeyboard())
+            return ctx.reply("❌ Товар не найден. Попробуйте выбрать заново.", await mainMenuKeyboard(user))
         }
 
         user.product = product.name
@@ -582,7 +596,7 @@ bot.on("text", async (ctx) => {
     if (user.step === "add_more") {
         if (text.toLowerCase() === "да") {
             user.step = null
-            return ctx.reply("Выберите товар:", await mainMenuKeyboard())
+            return ctx.reply("Выберите товар:", await mainMenuKeyboard(user))
         }
 
         if (text.toLowerCase() === "нет") {
@@ -730,7 +744,7 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    return ctx.reply("Выберите товар:", await mainMenuKeyboard())
+    return ctx.reply("Выберите товар:", await mainMenuKeyboard(user))
 })
 
 // ============================================================
