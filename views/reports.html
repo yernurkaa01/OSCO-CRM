@@ -4,54 +4,108 @@
 <meta charset="UTF-8">
 <title>OSCO — Отчёты</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="reports.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 
 <body>
 
 <div class="nav">
-    <a class="nav-link" href="/admin">Заказы</a>
-    <a class="nav-link" href="/admin/clients">Клиенты</a>
-    <a class="nav-link" href="/admin/history">История действий</a>
-    <a class="nav-link" href="/admin/warehouse">Склад</a>
-    <a class="nav-link active" href="/admin/reports">Отчёты</a>
+    <a class="nav-link" href="/admin">📦 Заказы</a>
+    <a class="nav-link" href="/admin/clients">👥 Клиенты</a>
+    <a class="nav-link" href="/admin/history">📜 История действий</a>
+    <a class="nav-link" href="/admin/warehouse">📦 Склад</a>
+    <a class="nav-link active" href="/admin/reports">📊 Отчёты</a>
     <a class="nav-link logout-link" href="/logout">Выйти</a>
 </div>
 
-<div style="padding: 24px; max-width: 900px; margin: 0 auto;">
+<div class="reports-page">
 
-    <h1 style="margin-bottom: 20px;">Отчёт по продажам</h1>
-
-    <div style="display:flex; gap:10px; margin-bottom: 20px; align-items:center; flex-wrap: wrap;">
-        <button class="btn period-btn active" data-period="today">Сегодня</button>
-        <button class="btn period-btn" data-period="week">С начала недели</button>
-        <button class="btn period-btn" data-period="month">С начала месяца</button>
-
-        <span style="margin-left: 10px; color:#888;">или конкретный период:</span>
-        <input type="date" id="dateFrom" class="warehouse-select">
-        <span>—</span>
-        <input type="date" id="dateTo" class="warehouse-select">
-        <button class="btn btn-primary" id="customRangeBtn">Показать</button>
+    <div class="reports-header">
+        <h1>Отчёты по продажам</h1>
+        <p class="subtitle">Сводная статистика по товарам</p>
     </div>
 
-    <div style="color:#888; margin-bottom: 12px;" id="periodLabel"></div>
+    <div class="reports-filters">
+        <button class="pill-btn active period-btn" data-period="today">Сегодня</button>
+        <button class="pill-btn period-btn" data-period="week">С начала недели</button>
+        <button class="pill-btn period-btn" data-period="month">С начала месяца</button>
 
-    <div class="stat-card" id="grand-total-card" style="margin-bottom: 20px;">
-        Общая выручка за период: <span id="grand-total">0</span>
+        <span class="divider-label">От</span>
+        <input type="date" id="dateFrom" class="date-input">
+        <span class="divider-label">До</span>
+        <input type="date" id="dateTo" class="date-input">
+        <button class="btn-show" id="customRangeBtn">Показать</button>
     </div>
 
-    <div class="table-card">
-        <table class="warehouse-table" id="reportTable">
+    <div class="period-label" id="periodLabel"></div>
+
+    <div class="stat-cards-row">
+        <div class="stat-card-r">
+            <div class="stat-icon-r blue">📦</div>
+            <div>
+                <div class="stat-label-r">Продано товаров</div>
+                <div class="stat-value-r" id="stat-qty">0 шт</div>
+            </div>
+        </div>
+        <div class="stat-card-r">
+            <div class="stat-icon-r green">📈</div>
+            <div>
+                <div class="stat-label-r">Выручка</div>
+                <div class="stat-value-r money" id="stat-revenue">0</div>
+            </div>
+        </div>
+        <div class="stat-card-r">
+            <div class="stat-icon-r orange">📋</div>
+            <div>
+                <div class="stat-label-r">Заказов</div>
+                <div class="stat-value-r" id="stat-orders">0</div>
+            </div>
+        </div>
+        <div class="stat-card-r">
+            <div class="stat-icon-r red">💳</div>
+            <div>
+                <div class="stat-label-r">Средний чек</div>
+                <div class="stat-value-r money" id="stat-avg">0</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="charts-row">
+        <div class="chart-card">
+            <h2>Продажи по дням</h2>
+            <canvas id="dailyChart" height="90"></canvas>
+        </div>
+        <div class="chart-card">
+            <h2>По категориям</h2>
+            <canvas id="categoryChart" height="90"></canvas>
+        </div>
+    </div>
+
+    <div class="table-card-r">
+        <div class="table-card-r-header">
+            <h2>Продано по товарам</h2>
+            <div class="table-controls">
+                <input type="text" id="searchInput" class="search-box-r" placeholder="Поиск товара">
+                <select id="sortSelect" class="sort-select-r">
+                    <option value="count">По количеству</option>
+                    <option value="sum">По выручке</option>
+                    <option value="name">По названию</option>
+                </select>
+            </div>
+        </div>
+
+        <table class="reports-table">
             <thead>
                 <tr>
                     <th>Товар</th>
-                    <th>Продано</th>
-                    <th>Ед. изм.</th>
-                    <th>Заказов</th>
-                    <th>Сумма</th>
+                    <th>Категория</th>
+                    <th>Количество</th>
+                    <th>Выручка</th>
                 </tr>
             </thead>
             <tbody id="reportBody">
-                <tr><td colspan="5">Загрузка...</td></tr>
+                <tr><td colspan="4" class="empty-row">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>
