@@ -3,95 +3,100 @@
 
 <head>
 
-    <meta charset="UTF-8" />
+<meta charset="UTF-8" />
 
-    <title>OSCO —История действий</title>
+<title>OSCO —История действий</title>
 
-    <link rel="stylesheet" href="/style.css" />
+<link rel="stylesheet" href="/style.css" />
 
 </head>
 
 <body>
 
-    <div class="nav">
+<div class="nav">
 
-        <a class="nav-link" href="/admin">
+<a class="nav-link" href="/admin">
             📦 Заказы
-        </a>
+</a>
 
-        <a class="nav-link" href="/admin/clients">
+<a class="nav-link" href="/admin/clients">
             👥 Клиенты
-        </a>
+</a>
 
-        <a class="nav-link active" href="/admin/history">
+<a class="nav-link active" href="/admin/history">
             📜 История действий
-        </a>
-        
-        <a class="nav-link" href="/admin/warehouse"> 
+</a>
+<a class="nav-link" href="/admin/warehouse"> 
              📦 Склад 
-        </a>
+</a>
+<a class="nav-link" href="/admin/reports">
+            📊 Отчёты
+</a>
+<a class="nav-link logout-link" href="/logout">
+            Выйти
+</a>
 
-    </div>
-
-
-    <div class="left" style="width:95%;margin:auto;">
-
-        <h1>📜 История действий</h1>
-
-        <table>
-
-            <thead>
-
-                <tr>
-                    <th>Сотрудник</th>
-                    <th>Действие</th>
-                    <th>ID заказа</th>
-                    <th>Время</th>
-                </tr>
-
-            </thead>
-
-            <tbody id="historyTable"></tbody>
-
-        </table>
-
-    </div>
+</div>
 
 
-    <script>
+<div class="left" style="width:95%;margin:auto;">
 
-        async function loadHistory() {
+<h1>📜 История действий</h1>
 
-            const res = await fetch("/logs")
+<table>
 
-            const logs = await res.json()
+<thead>
 
-            const table = document.getElementById("historyTable")
+<tr>
+<th>Сотрудник</th>
+<th>Действие</th>
+<th>ID заказа</th>
+<th>Время</th>
+</tr>
 
-            table.innerHTML = ""
+</thead>
 
-            logs.forEach(log => {
+<tbody id="historyTable"></tbody>
 
-                const tr = document.createElement("tr")
+</table>
 
-                tr.innerHTML = `
+</div>
+
+
+<script>
+
+async function loadHistory() {
+
+const res = await fetch("/logs")
+
+const logs = await res.json()
+
+const table = document.getElementById("historyTable")
+
+table.innerHTML = ""
+
+logs.forEach(log => {
+
+const tr = document.createElement("tr")
+
+tr.innerHTML = `
                     <td>${log.user}</td>
                     <td>${log.action}</td>
                     <td>${log.orderId}</td>
                     <td>
-                        ${new Date(log.createdAt).toLocaleString()}
+${new Date(log.createdAt).toLocaleString()}
                     </td>
                 `
 
-                table.appendChild(tr)
+table.appendChild(tr)
 
             })
 
         }
 
-        loadHistory()
+loadHistory()
 
-    </script>
+</script>
 
 </body>
 </html>
