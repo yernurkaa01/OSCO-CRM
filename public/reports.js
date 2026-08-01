@@ -1,64 +1,72 @@
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<title>OSCO — Отчёты</title>
-<link rel="stylesheet" href="style.css">
-</head>
+(function () {
+    const API = '/admin/api/reports/sales';
 
-<body>
+    function formatMoney(n) {
+        return Number(n || 0).toLocaleString('ru-RU') + ' ₸';
+    }
 
-<div class="nav">
-    <a class="nav-link" href="/admin">Заказы</a>
-    <a class="nav-link" href="/admin/clients">Клиенты</a>
-    <a class="nav-link" href="/admin/history">История действий</a>
-    <a class="nav-link" href="/admin/warehouse">Склад</a>
-    <a class="nav-link active" href="/admin/reports">Отчёты</a>
-    <a class="nav-link logout-link" href="/logout">Выйти</a>
-</div>
+    function formatDate(iso) {
+        return new Date(iso).toLocaleDateString('ru-RU');
+    }
 
-<div style="padding: 24px; max-width: 900px; margin: 0 auto;">
+    async function loadReport(params) {
+        document.getElementById('reportBody').innerHTML =
+            '<tr><td colspan="5">Загрузка...</td></tr>';
 
-    <h1 style="margin-bottom: 20px;">Отчёт по продажам</h1>
+        const query = new URLSearchParams(params).toString();
+        const res = await fetch(`${API}?${query}`);
+        const data = await res.json();
 
-    <div style="display:flex; gap:10px; margin-bottom: 20px; align-items:center; flex-wrap: wrap;">
-        <button class="btn period-btn active" data-period="today">Сегодня</button>
-        <button class="btn period-btn" data-period="week">С начала недели</button>
-        <button class="btn period-btn" data-period="month">С начала месяца</button>
+        document.getElementById('grand-total').textContent = formatMoney(data.grandTotal);
+        document.getElementById('periodLabel').textContent =
+            `Период: ${formatDate(data.from)} — ${formatDate(data.to)}`;
 
-        <span style="margin-left: 10px; color:#888;">или конкретный период:</span>
-        <input type="date" id="dateFrom" class="warehouse-select">
-        <span>—</span>
-        <input type="date" id="dateTo" class="warehouse-select">
-        <button class="btn btn-primary" id="customRangeBtn">Показать</button>
-    </div>
+        if (!data.items.length) {
+            document.getElementById('reportBody').innerHTML =
+                '<tr><td colspan="5">Продаж за этот период нет</td></tr>';
+            return;
+        }
 
-    <div style="color:#888; margin-bottom: 12px;" id="periodLabel"></div>
+        document.getElementById('reportBody').innerHTML = data.items.map(item => `
+            <tr>
+                <td>${item.product}</td>
+                <td><b>${item.totalCount}</b></td>
+                <td>${item.unit}</td>
+                <td>${item.orders}</td>
+                <td>${formatMoney(item.totalSum)}</td>
+            </tr>
+        `).join('');
+    }
 
-    <div class="stat-card" id="grand-total-card" style="margin-bottom: 20px;">
-        Общая выручка за период: <span id="grand-total">0</span>
-    </div>
+    // Быстрые кнопки периода
+    document.querySelectorAll('.period-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
 
-    <div class="table-card">
-        <table class="warehouse-table" id="reportTable">
-            <thead>
-                <tr>
-                    <th>Товар</th>
-                    <th>Продано</th>
-                    <th>Ед. изм.</th>
-                    <th>Заказов</th>
-                    <th>Сумма</th>
-                </tr>
-            </thead>
-            <tbody id="reportBody">
-                <tr><td colspan="5">Загрузка...</td></tr>
-            </tbody>
-        </table>
-    </div>
+            // Сбрасываем произвольный диапазон, если выбрана быстрая кнопка
+            document.getElementById('dateFrom').value = '';
+            document.getElementById('dateTo').value = '';
 
-</div>
+            loadReport({ period: btn.dataset.period });
+        });
+    });
 
-<script src="reports.js"></script>
+    // Произвольный диапазон дат (или одна конкретная дата, если "по" не заполнено)
+    document.getElementById('customRangeBtn').addEventListener('click', () => {
+        const from = document.getElementById('dateFrom').value;
+        const to = document.getElementById('dateTo').value;
 
-</body>
-</html>
+        if (!from) {
+            alert('Укажите хотя бы начальную дату');
+            return;
+        }
+
+        document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+
+        loadReport({ from, to: to || from });
+    });
+
+    // По умолчанию — сегодня
+    loadReport({ period: 'today' });
+})();
