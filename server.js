@@ -351,6 +351,28 @@ app.post("/confirm-order/:id", checkAuth, async (req, res) => {
         })
     }
 
+    // Находим ВСЕ товары этого заказа (они делят один orderCode),
+    // чтобы подтвердить их разом и отправить клиенту ОДНО сообщение,
+    // а не по одному на каждую позицию корзины.
+    const siblingOrders = await Order.find({
+        orderCode: order.orderCode,
+        telegramId: order.telegramId,
+        status: "ожидание"
+    })
+
+    const ordersToConfirm = siblingOrders.length ? siblingOrders : [order]
+
+    for (const o of ordersToConfirm) {
+        await finalizeStock(o.product, o.count)
+        await Order.findByIdAndUpdate(o._id, { status: "оплачено" })
+    }
+
+    const itemsList = ordersToConfirm
+        .map(o => `🛒 ${o.product} — ${o.count} шт.`)
+        .join("\n")
+
+    const grandTotal = ordersToConfirm.reduce((acc, o) => acc + (o.totalPrice || 0), 0)
+
     const telegramResponse = await fetch(
     `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
     {
@@ -368,7 +390,11 @@ app.post("/confirm-order/:id", checkAuth, async (req, res) => {
 `✅ Оплата подтверждена!
 
 Ваш заказ принят.
-Код заказа: ${order.orderCode}`
+Код заказа: ${order.orderCode}
+
+${itemsList}
+
+💰 Итого: ${grandTotal.toLocaleString("ru-RU")} ₸`
 
         })
     }
@@ -378,21 +404,11 @@ const telegramData = await telegramResponse.json()
 
 console.log(telegramData)
 
-    // ⬇️ Резерв превращается в постоянное списание (qty и reservedQty вместе)
-    await finalizeStock(order.product, order.count)
-
-    await Order.findByIdAndUpdate(
-        req.params.id,
-        {
-            status: "оплачено"
-        }
-    )
-
     await Log.create({
 
         user: req.session.user.username,
 
-        action: "Подтвердил оплату",
+        action: `Подтвердил оплату (${ordersToConfirm.length} поз.)`,
 
         orderId: order.orderCode
 
@@ -422,8 +438,20 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
     }
     console.log("REJECT ORDER:", order)
 
-    // ⬇️ Освобождаем резерв — товар снова доступен для покупки
-    await releaseStock(order.product, order.count)
+    // Находим ВСЕ товары этого заказа (делят один orderCode) — отклоняем
+    // и освобождаем резерв разом, отправляем клиенту ОДНО сообщение.
+    const siblingOrders = await Order.find({
+        orderCode: order.orderCode,
+        telegramId: order.telegramId,
+        status: "ожидание"
+    })
+
+    const ordersToReject = siblingOrders.length ? siblingOrders : [order]
+
+    for (const o of ordersToReject) {
+        await releaseStock(o.product, o.count)
+        await Order.findByIdAndUpdate(o._id, { status: "отклонено" })
+    }
 
     const telegramResponse = await fetch(
         `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
@@ -452,18 +480,11 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
 
     console.log(telegramData)
 
-    await Order.findByIdAndUpdate(
-        req.params.id,
-        {
-            status: "отклонено"
-        }
-    )
-
     await Log.create({
 
         user: req.session.user.username,
 
-        action: "Отклонил заказ",
+        action: `Отклонил заказ (${ordersToReject.length} поз.)`,
 
         orderId: order.orderCode
 
