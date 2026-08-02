@@ -158,12 +158,14 @@ function formatCartSummary(user) {
 async function addToCartAndAskMore(ctx, user) {
     user.cart.push({
         product: user.product,
+        code: user.code,
         count: user.count,
         price: user.price,
         unit: user.unit
     })
 
     delete user.product
+    delete user.code
     delete user.price
     delete user.unit
     delete user.count
@@ -500,6 +502,7 @@ bot.on("text", async (ctx) => {
         }
 
         user.product = product.name
+        user.code = product.code
         user.price = product.price
         user.unit = product.unit
         user.step = "count"
@@ -527,6 +530,7 @@ bot.on("text", async (ctx) => {
         }
 
         user.product = product.name
+        user.code = product.code
         user.price = product.price
         user.unit = product.unit
         user.step = "count"
@@ -645,6 +649,7 @@ bot.on("text", async (ctx) => {
                 await Order.create({
                     orderCode,
                     product: item.product,
+                    productCode: item.code,
                     count: item.count,
                     telegramId: id,
                     totalPrice: item.count * item.price,
@@ -703,11 +708,35 @@ bot.on("text", async (ctx) => {
         user.bank = text
         user.step = "check"
 
+        // ⚠️ Критично: уведомляем менеджера ПРЯМО СЕЙЧАС, а не после того
+        // как клиент пришлёт чек. Иначе бот обещает клиенту "выставим счёт
+        // в течение минуты", а по факту никто не знает, что нужно вручную
+        // отправить платёжный запрос в Kaspi/Halyk на его номер телефона.
+        const cartList = user.cart
+            .map(item => `${item.product} — ${item.count} ${item.unit}`)
+            .join("\n")
+        const grandTotal = user.cart.reduce((acc, item) => acc + item.count * item.price, 0)
+
+        try {
+            await ctx.telegram.sendMessage(
+                CHECKS_CHAT_ID,
+                `💳 ТРЕБУЕТСЯ ВЫСТАВИТЬ СЧЁТ\n\n` +
+                `👤 ${user.name}\n` +
+                `📞 ${user.phone}\n` +
+                `🏦 ${user.bank}\n\n` +
+                `${cartList}\n\n` +
+                `💰 Сумма: ${grandTotal.toLocaleString("ru-RU")} ₸\n\n` +
+                `⏱️ Отправьте платёжный запрос на этот номер прямо сейчас — клиент уже ждёт счёт.`
+            )
+        } catch (e) {
+            console.log("Не удалось уведомить о необходимости выставить счёт:", e.message)
+        }
+
         const bankMessage = text === "Kaspi Bank"
-            ? `⏳ Мы выставим вам счет в приложении Kaspi Bank в течение минуты.\n\n` +
+            ? `⏳ Мы выставим вам счет в приложении Kaspi Bank в течение нескольких минут.\n\n` +
               `📱 Пожалуйста, перейдите в Kaspi.kz -> Сообщения -> Платежи и оплатите его.\n\n` +
               `📄 После оплаты отправьте PDF чек в этот чат.`
-            : `⏳ Мы выставим вам счет в приложении Halyk Bank в течение минуты.\n\n` +
+            : `⏳ Мы выставим вам счет в приложении Halyk Bank в течение нескольких минут.\n\n` +
               `📱 Пожалуйста, перейдите в Halyk Homebank -> Платежи и оплатите его.\n\n` +
               `📄 После оплаты отправьте PDF чек в этот чат.`
 
