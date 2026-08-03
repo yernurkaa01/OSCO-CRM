@@ -60,11 +60,17 @@ router.get('/api/reports/sales', async (req, res) => {
         };
 
         // ---- Продано по товарам ----
+        // Группируем по коду товара (если он сохранён в заказе), а не по
+        // тексту названия — так переименование товара на складе больше НЕ
+        // рвёт связь с его историей продаж. Для старых заказов (до того,
+        // как мы начали сохранять код) используем текст названия как раньше.
         const sold = await Order.aggregate([
             { $match: matchStage },
             {
                 $group: {
-                    _id: "$product",
+                    _id: { $ifNull: ["$productCode", "$product"] },
+                    sampleName: { $first: "$product" },
+                    sampleCode: { $first: "$productCode" },
                     totalCount: { $sum: "$count" },
                     totalSum: { $sum: "$totalPrice" },
                     orders: { $sum: 1 }
@@ -73,23 +79,42 @@ router.get('/api/reports/sales', async (req, res) => {
             { $sort: { totalCount: -1 } }
         ]);
 
-        const productNames = sold.map(s => s._id);
-        const products = await Product.find(
-            { name: { $in: productNames } },
+        const codesToLookup = sold.filter(s => s.sampleCode).map(s => s.sampleCode);
+        const namesToLookup = sold.filter(s => !s.sampleCode).map(s => s.sampleName);
+
+        const productsByCode = await Product.find(
+            { code: { $in: codesToLookup } },
+            { code: 1, name: 1, unit: 1, category: 1 }
+        );
+        const productsByName = await Product.find(
+            { name: { $in: namesToLookup } },
             { name: 1, unit: 1, category: 1 }
         );
 
-        const infoByName = {};
-        products.forEach(p => { infoByName[p.name] = { unit: p.unit, category: p.category }; });
+        const infoByCode = {};
+        productsByCode.forEach(p => { infoByCode[p.code] = p; });
 
-        const items = sold.map(s => ({
-            product: s._id,
-            unit: infoByName[s._id]?.unit || "-",
-            category: infoByName[s._id]?.category || "Другое",
-            totalCount: s.totalCount,
-            totalSum: s.totalSum,
-            orders: s.orders
-        }));
+        const infoByName = {};
+        productsByName.forEach(p => { infoByName[p.name] = p; });
+
+        const items = sold.map(s => {
+            const byCode = s.sampleCode ? infoByCode[s.sampleCode] : null;
+            const byName = !s.sampleCode ? infoByName[s.sampleName] : null;
+            const info = byCode || byName;
+
+            return {
+                // Если товар найден по коду — берём его АКТУАЛЬНОЕ название
+                // (даже если товар переименовали, отчёт покажет новое имя).
+                // Если код не сохранён (старый заказ) — используем текст,
+                // который был записан в заказе на тот момент.
+                product: info?.name || s.sampleName,
+                unit: info?.unit || "-",
+                category: info?.category || "Другое",
+                totalCount: s.totalCount,
+                totalSum: s.totalSum,
+                orders: s.orders
+            };
+        });
 
         const grandTotal = items.reduce((acc, i) => acc + i.totalSum, 0);
         const totalQtySold = items.reduce((acc, i) => acc + i.totalCount, 0);
