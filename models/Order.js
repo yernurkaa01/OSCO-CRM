@@ -1,9 +1,11 @@
 import mongoose from "mongoose"
 
 const orderSchema = new mongoose.Schema({
-    orderCode: String,   // без unique — у одного заказа может быть несколько товаров с одним orderCode
+    orderCode: String,
 
     product: String,
+    productCode: String,   // код товара на момент заказа — не меняется,
+                            // даже если товар потом переименуют в складе
     count: Number,
 
     name: String,
