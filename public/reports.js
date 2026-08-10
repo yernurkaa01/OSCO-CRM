@@ -48,8 +48,6 @@
             return;
         }
 
-        // Лидер считаем по всей категории целиком (без учёта поиска/страницы),
-        // сортируем по количеству продано — это и есть "лучше всего продаётся"
         const categoryItems = currentItems.filter(i => i.category === category);
 
         if (!categoryItems.length) {
@@ -59,8 +57,7 @@
 
         // Лидер всегда считается по факту продаж (количество, затем выручка
         // как tie-breaker) — независимо от того, как отсортирована таблица
-        // для отображения (иначе при "По названию" лидером бы становился
-        // просто первый по алфавиту товар).
+        // для отображения.
         const leader = categoryItems.slice().sort((a, b) => {
             if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
             return b.totalSum - a.totalSum;
@@ -73,8 +70,6 @@
     }
 
     function computeTop5Ids(items) {
-        // Топ-5 определяем по факту продаж (количество, выручка как
-        // tie-breaker) — независимо от текущей сортировки/поиска в таблице.
         const ranked = items.slice().sort((a, b) => {
             if (b.totalCount !== a.totalCount) return b.totalCount - a.totalCount;
             return b.totalSum - a.totalSum;
@@ -96,7 +91,7 @@
 
         if (!filtered.length) {
             document.getElementById('reportBody').innerHTML =
-                '<tr><td colspan="8" class="empty-row">Ничего не найдено</td></tr>';
+                '<tr><td colspan="9" class="empty-row">Ничего не найдено</td></tr>';
             document.getElementById('footerInfo').textContent = 'Показано 0 из 0 товаров';
             document.getElementById('pagination').innerHTML = '';
             return;
@@ -108,6 +103,10 @@
             const rowNumber = start + i + 1;
             const isTop5 = top5Ids.has(item.product);
 
+            const profitDisplay = item.profit === null
+                ? '<span style="color:#aaa;">нет данных</span>'
+                : `<span class="money">${formatMoney(item.profit)}</span>`;
+
             return `
                 <tr class="${isTop5 ? 'top5-row' : ''}">
                     <td class="row-number">${rowNumber}</td>
@@ -117,6 +116,7 @@
                     <td>${item.orders}</td>
                     <td>${formatMoney(avgPrice)}</td>
                     <td class="money">${formatMoney(item.totalSum)}</td>
+                    <td>${profitDisplay}</td>
                     <td>${share}%</td>
                 </tr>
             `;
@@ -154,10 +154,13 @@
 
     function populateCategoryFilter() {
         const select = document.getElementById('categorySelect');
+        const currentValue = select.value;
         const categories = [...new Set(currentItems.map(i => i.category))].sort((a, b) => a.localeCompare(b, 'ru'));
 
         select.innerHTML = '<option value="all">Все категории</option>' +
             categories.map(c => `<option value="${c}">${c}</option>`).join('');
+
+        if (categories.includes(currentValue)) select.value = currentValue;
     }
 
     function renderDailyChart(dailyBreakdown) {
@@ -217,7 +220,7 @@
 
     async function loadReport(params) {
         document.getElementById('reportBody').innerHTML =
-            '<tr><td colspan="7" class="empty-row">Загрузка...</td></tr>';
+            '<tr><td colspan="9" class="empty-row">Загрузка...</td></tr>';
 
         const query = new URLSearchParams(params).toString();
         const res = await fetch(`${API}?${query}`);
@@ -230,6 +233,16 @@
         document.getElementById('stat-revenue').textContent = formatMoney(data.grandTotal);
         document.getElementById('stat-orders').textContent = data.distinctOrders;
         document.getElementById('stat-avg').textContent = formatMoney(data.avgCheck);
+        document.getElementById('stat-profit').textContent = formatMoney(data.grandProfit);
+
+        const warningEl = document.getElementById('profitWarning');
+        if (data.itemsMissingCost > 0) {
+            warningEl.style.display = 'block';
+            warningEl.textContent =
+                `⚠️ У ${data.itemsMissingCost} товар(ов) не указана закупочная цена — прибыль по ним не учтена в сумме выше.`;
+        } else {
+            warningEl.style.display = 'none';
+        }
 
         renderDailyChart(data.dailyBreakdown);
         renderCategoryChart(data.categoryBreakdown);

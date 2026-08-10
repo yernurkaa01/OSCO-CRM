@@ -35,7 +35,7 @@ function getDateRange(period, fromParam, toParam) {
 }
 
 function toDateKey(d) {
-    return new Date(d).toISOString().slice(0, 10); // YYYY-MM-DD
+    return new Date(d).toISOString().slice(0, 10);
 }
 
 function formatDayLabel(dateKey) {
@@ -84,11 +84,11 @@ router.get('/api/reports/sales', async (req, res) => {
 
         const productsByCode = await Product.find(
             { code: { $in: codesToLookup } },
-            { code: 1, name: 1, unit: 1, category: 1 }
+            { code: 1, name: 1, unit: 1, category: 1, purchasePrice: 1 }
         );
         const productsByName = await Product.find(
             { name: { $in: namesToLookup } },
-            { name: 1, unit: 1, category: 1 }
+            { name: 1, unit: 1, category: 1, purchasePrice: 1 }
         );
 
         const infoByCode = {};
@@ -97,10 +97,21 @@ router.get('/api/reports/sales', async (req, res) => {
         const infoByName = {};
         productsByName.forEach(p => { infoByName[p.name] = p; });
 
+        let itemsMissingCost = 0;
+
         const items = sold.map(s => {
             const byCode = s.sampleCode ? infoByCode[s.sampleCode] : null;
             const byName = !s.sampleCode ? infoByName[s.sampleName] : null;
             const info = byCode || byName;
+
+            // Прибыль считаем по ТЕКУЩЕЙ закупочной цене товара — история
+            // изменений закупочной цены во времени не хранится, так что для
+            // старых продаж это приближение, а не абсолютно точная цифра.
+            const purchasePrice = info?.purchasePrice;
+            const hasCost = purchasePrice !== undefined && purchasePrice !== null;
+            const profit = hasCost ? s.totalSum - (purchasePrice * s.totalCount) : null;
+
+            if (!hasCost) itemsMissingCost++;
 
             return {
                 // Если товар найден по коду — берём его АКТУАЛЬНОЕ название
@@ -112,12 +123,14 @@ router.get('/api/reports/sales', async (req, res) => {
                 category: info?.category || "Другое",
                 totalCount: s.totalCount,
                 totalSum: s.totalSum,
+                profit,
                 orders: s.orders
             };
         });
 
         const grandTotal = items.reduce((acc, i) => acc + i.totalSum, 0);
         const totalQtySold = items.reduce((acc, i) => acc + i.totalCount, 0);
+        const grandProfit = items.reduce((acc, i) => acc + (i.profit || 0), 0);
 
         // ---- Уникальные заказы (по orderCode) и средний чек ----
         const distinctOrderCodesAgg = await Order.aggregate([
@@ -140,7 +153,6 @@ router.get('/api/reports/sales', async (req, res) => {
         const dailyMap = {};
         dailyAgg.forEach(d => { dailyMap[d._id] = d.revenue; });
 
-        // Заполняем все дни диапазона (включая нулевые), чтобы график был непрерывным
         const dailyBreakdown = [];
         const cursor = new Date(from);
         cursor.setHours(0, 0, 0, 0);
@@ -198,6 +210,8 @@ router.get('/api/reports/sales', async (req, res) => {
             to,
             items,
             grandTotal,
+            grandProfit,
+            itemsMissingCost,
             totalQtySold,
             distinctOrders,
             avgCheck,

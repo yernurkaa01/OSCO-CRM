@@ -1,5 +1,5 @@
 /* ============================================================
-   reports.css — стили страницы "Отчёты", подогнанные под референс
+   reports.css — стили страницы "Отчёты"
    ============================================================ */
 
 .reports-page {
@@ -22,7 +22,6 @@
   margin: 0 0 22px;
 }
 
-/* --- Панель фильтров --- */
 .reports-filters {
   display: flex;
   align-items: center;
@@ -89,10 +88,9 @@
   margin-bottom: 20px;
 }
 
-/* --- Карточки статистики --- */
 .stat-cards-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
   margin-bottom: 22px;
 }
@@ -139,7 +137,6 @@
   color: #1a9d52;
 }
 
-/* --- Блоки графиков --- */
 .charts-row {
   display: grid;
   grid-template-columns: 2fr 1fr;
@@ -161,7 +158,6 @@
   margin: 0 0 14px;
 }
 
-/* --- Таблица --- */
 .table-card-r {
   background: #fff;
   border-radius: 14px;
@@ -239,6 +235,51 @@ table.reports-table .empty-row {
   padding: 30px;
 }
 
+/* --- Топ-5 товаров --- */
+tr.top5-row {
+  background: #fff8e6;
+}
+
+.row-number {
+  color: #8a8f98;
+  font-variant-numeric: tabular-nums;
+}
+
+.top5-badge {
+  display: inline-block;
+  background: #f5a623;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 6px;
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+/* --- Лидер категории --- */
+.category-leader {
+  margin: 0 22px 16px;
+  padding: 14px 18px;
+  background: #eef4ff;
+  border: 1px solid #d3e2ff;
+  border-radius: 10px;
+  font-size: 14px;
+  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.category-leader b {
+  color: #2551d9;
+}
+
+.category-leader .leader-money {
+  color: #1a9d52;
+  font-weight: 600;
+}
+
 /* --- Футер таблицы: пагинация --- */
 .table-footer-r {
   display: flex;
@@ -274,49 +315,4 @@ table.reports-table .empty-row {
 .pagination-r button:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-/* --- Плашка "Лидер категории" --- */
-.category-leader {
-  margin: 0 22px 16px;
-  padding: 14px 18px;
-  background: #eef4ff;
-  border: 1px solid #d3e2ff;
-  border-radius: 10px;
-  font-size: 14px;
-  color: #1a1a1a;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.category-leader b {
-  color: #2551d9;
-}
-
-.category-leader .leader-money {
-  color: #1a9d52;
-  font-weight: 600;
-}
-
-/* --- Топ-5 товаров --- */
-tr.top5-row {
-  background: #fff8e6;
-}
-
-.row-number {
-  color: #8a8f98;
-  font-variant-numeric: tabular-nums;
-}
-
-.top5-badge {
-  display: inline-block;
-  background: #f5a623;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 6px;
-  margin-right: 6px;
-  vertical-align: middle;
 }

@@ -69,7 +69,15 @@
                 <div class="stat-value-r money" id="stat-avg">0</div>
             </div>
         </div>
+        <div class="stat-card-r">
+            <div class="stat-icon-r green">💵</div>
+            <div>
+                <div class="stat-label-r">Чистая прибыль</div>
+                <div class="stat-value-r money" id="stat-profit">0</div>
+            </div>
+        </div>
     </div>
+    <div class="period-label" id="profitWarning" style="display:none;"></div>
 
     <div class="charts-row">
         <div class="chart-card">
@@ -110,11 +118,12 @@
                     <th>Заказов</th>
                     <th>Средняя цена</th>
                     <th>Выручка</th>
+                    <th>Прибыль</th>
                     <th>Доля</th>
                 </tr>
             </thead>
             <tbody id="reportBody">
-                <tr><td colspan="8" class="empty-row">Загрузка...</td></tr>
+                <tr><td colspan="9" class="empty-row">Загрузка...</td></tr>
             </tbody>
         </table>
 
