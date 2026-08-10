@@ -124,7 +124,7 @@
     els.tableCount.textContent = `Товары (${data.total.toLocaleString('ru-RU')})`;
 
     if (!data.items.length) {
-      els.tableBody.innerHTML = `<tr><td colspan="9"><div class="empty-state">Товары не найдены</div></td></tr>`;
+      els.tableBody.innerHTML = `<tr><td colspan="10"><div class="empty-state">Товары не найдены</div></td></tr>`;
     } else {
       els.tableBody.innerHTML = data.items.map((p) => `
         <tr data-id="${p.id}">
@@ -134,6 +134,7 @@
           <td class="qty-${statusClass(p.status.code)}">${p.qty}</td>
           <td>${p.unit}</td>
           <td>${formatMoney(p.price)}</td>
+          <td>${p.purchasePrice != null ? formatMoney(p.purchasePrice) : '<span style="color:#aaa;">—</span>'}</td>
           <td>${formatMoney(p.sum)}</td>
           <td>
             <span class="status-badge">
@@ -217,8 +218,11 @@
         <label>Ед. изм.
           <input type="text" id="editUnit" value="${product.unit}">
         </label>
-        <label>Цена
+        <label>Цена (продажная)
           <input type="number" id="editPrice" value="${product.price}">
+        </label>
+        <label>Закупочная цена <span style="color:#999;font-weight:normal;">(нужна для расчёта чистой прибыли)</span>
+          <input type="number" id="editPurchasePrice" value="${product.purchasePrice ?? ''}" placeholder="Например: 2000">
         </label>
         <div class="modal-actions">
           <button id="editCancel">Отмена</button>
@@ -260,6 +264,7 @@
         qty: Number(overlay.querySelector('#editQty').value),
         unit: overlay.querySelector('#editUnit').value.trim(),
         price: Number(overlay.querySelector('#editPrice').value),
+        purchasePrice: overlay.querySelector('#editPurchasePrice').value.trim(),
       };
 
       if (!body.category) {
@@ -397,7 +402,7 @@
 
   if (els.addProductBtn) {
     els.addProductBtn.addEventListener('click', () => {
-      openProductModal({ code: '', name: '', category: '', qty: 0, unit: '', price: 0 }, null);
+      openProductModal({ code: '', name: '', category: '', qty: 0, unit: '', price: 0, purchasePrice: '' }, null);
     });
   }
 
