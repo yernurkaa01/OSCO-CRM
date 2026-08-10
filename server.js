@@ -20,6 +20,7 @@ import clientsRouter from "./routes/clients.js"
 
 import warehouseApiRouter from "./routes/warehouse.js"
 import reportsApiRouter from "./routes/reports.js"
+import employeesApiRouter from "./routes/employees.js"
 import { finalizeStock, releaseStock, restockStock } from "./services/stockCheck.js"
 
 
@@ -52,13 +53,13 @@ app.use(express.static(path.join(__dirname, "public")))
 // ============================================================
 
 app.use(session({
-    secret: "osco_super_secret_key",
-    resave: false,
-    saveUninitialized: false,
+secret: "osco_super_secret_key",
+resave: false,
+saveUninitialized: false,
 
-    cookie: {
-        secure: false,
-        maxAge: 1000 * 60 * 60 * 24
+cookie: {
+secure: false,
+maxAge: 1000 * 60 * 60 * 24
     }
 }))
 
@@ -69,15 +70,15 @@ app.use(session({
 
 const USERS = [
     {
-        username: "admin",   // Нуртуган 
-        password: "osco_00",
-        role: "owner"
+username: "admin",   // Нуртуган 
+password: "osco_00",
+role: "owner"
     },
 
     {
-        username: "cashier1",  // Женисбек
-        password: "osco_01",
-        role: "cashier"
+username: "cashier1",  // Женисбек
+password: "osco_01",
+role: "cashier"
     }
 ]
 
@@ -88,27 +89,27 @@ const USERS = [
 
 function checkAuth(req, res, next) {
 
-    if (!req.session.user) {
-        return res.redirect("/login")
+if (!req.session.user) {
+return res.redirect("/login")
     }
 
-    next()
+next()
 }
 
 // Middleware для проверки роли "owner"
 function ownerOnly(req, res, next) {
 
-    if (req.session.user.role !== "owner") {
-        return res.status(403).send("Нет доступа")
+if (req.session.user.role !== "owner") {
+return res.status(403).send("Нет доступа")
     }
 
-    next()
+next()
 
 }
 
 
 app.get("/", (req, res) => {
-    res.redirect("/login")
+res.redirect("/login")
 })
 
 
@@ -117,7 +118,7 @@ app.get("/", (req, res) => {
 // ============================================================
 
 const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
+apiKey: process.env.OPENAI_API_KEY
 })
 
 
@@ -128,10 +129,10 @@ const openai = new OpenAI({
 console.log("SERVER URI:", process.env.MONGO_URI)
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
-        console.log("✅ MongoDB подключен")
+console.log("✅ MongoDB подключен")
     })
     .catch(err => {
-        console.log("❌ MongoDB ошибка:", err)
+console.log("❌ MongoDB ошибка:", err)
     })
 
 
@@ -141,7 +142,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 app.get("/login", (req, res) => {
 
-    res.send(`
+res.send(`
         <html>
 
         <body style="
@@ -221,20 +222,20 @@ app.get("/login", (req, res) => {
 
 app.post("/login", (req, res) => {
 
-    const { username, password } = req.body
+const { username, password } = req.body
 
-    const user = USERS.find(u =>
-        u.username === username &&
-        u.password === password
+const user = USERS.find(u =>
+u.username === username &&
+u.password === password
     )
 
-    if (!user) {
-        return res.send("❌ Неверный логин или пароль")
+if (!user) {
+return res.send("❌ Неверный логин или пароль")
     }
 
-    req.session.user = user
+req.session.user = user
 
-    res.redirect("/admin")
+res.redirect("/admin")
 
 })
 
@@ -245,8 +246,8 @@ app.post("/login", (req, res) => {
 
 app.get("/logout", (req, res) => {
 
-    req.session.destroy(() => {
-        res.redirect("/login")
+req.session.destroy(() => {
+res.redirect("/login")
     })
 
 })
@@ -258,31 +259,31 @@ app.get("/logout", (req, res) => {
 
 app.get("/orders", checkAuth, async (req, res) => {
 
-    const { date } = req.query
+const { date } = req.query
 
-    let filter = {
-        status: { $nin: ["ожидание", "резерв"] }
+let filter = {
+status: { $nin: ["ожидание", "резерв"] }
     }
 
-    if (date) {
+if (date) {
 
-        const start = new Date(date)
+const start = new Date(date)
 
-        const end = new Date(date)
+const end = new Date(date)
 
-        end.setDate(end.getDate() + 1)
+end.setDate(end.getDate() + 1)
 
-        filter.createdAt = {
-            $gte: start,
-            $lt: end
+filter.createdAt = {
+$gte: start,
+$lt: end
         }
 
     }
 
-    const orders = await Order.find(filter)
+const orders = await Order.find(filter)
         .sort({ createdAt: -1 })
 
-    res.json(orders)
+res.json(orders)
 
 })
 
@@ -293,11 +294,11 @@ app.get("/orders", checkAuth, async (req, res) => {
 
 app.get("/pending-orders", checkAuth, async (req, res) => {
 
-    const orders = await Order.find({
-        status: "ожидание"
+const orders = await Order.find({
+status: "ожидание"
     }).sort({ createdAt: -1 })
 
-    res.json(orders)
+res.json(orders)
 
 })
 
@@ -307,29 +308,29 @@ app.get("/pending-orders", checkAuth, async (req, res) => {
 
 app.get("/receipt/:fileId", checkAuth, async (req, res) => {
 
-    try {
+try {
 
-        const fileId = req.params.fileId
+const fileId = req.params.fileId
 
-        const telegramFile = await fetch(
-            `https://api.telegram.org/bot${process.env.BOT_TOKEN}/getFile?file_id=${fileId}`
+const telegramFile = await fetch(
+`https://api.telegram.org/bot${process.env.BOT_TOKEN}/getFile?file_id=${fileId}`
         )
 
-        const data = await telegramFile.json()
-        console.log(data)
+const data = await telegramFile.json()
+console.log(data)
 
-        const filePath = data.result.file_path
+const filePath = data.result.file_path
 
-        const fileUrl =
-            `https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${filePath}`
+const fileUrl =
+`https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${filePath}`
 
-        res.redirect(fileUrl)
+res.redirect(fileUrl)
 
     } catch (err) {
 
-        console.log(err)
+console.log(err)
 
-        res.status(500).send("Ошибка открытия PDF")
+res.status(500).send("Ошибка открытия PDF")
 
     }
 
@@ -344,50 +345,50 @@ app.get("/receipt/:fileId", checkAuth, async (req, res) => {
 
 app.post("/confirm-order/:id", checkAuth, async (req, res) => {
 
-    const order = await Order.findById(req.params.id)
+const order = await Order.findById(req.params.id)
 
-    if (!order) {
-        return res.status(404).json({
-            error: "Заказ не найден"
+if (!order) {
+return res.status(404).json({
+error: "Заказ не найден"
         })
     }
 
-    // Находим ВСЕ товары этого заказа (они делят один orderCode),
-    // чтобы подтвердить их разом и отправить клиенту ОДНО сообщение,
-    // а не по одному на каждую позицию корзины.
-    const siblingOrders = await Order.find({
-        orderCode: order.orderCode,
-        telegramId: order.telegramId,
-        status: "ожидание"
+// Находим ВСЕ товары этого заказа (они делят один orderCode),
+// чтобы подтвердить их разом и отправить клиенту ОДНО сообщение,
+// а не по одному на каждую позицию корзины.
+const siblingOrders = await Order.find({
+orderCode: order.orderCode,
+telegramId: order.telegramId,
+status: "ожидание"
     })
 
-    const ordersToConfirm = siblingOrders.length ? siblingOrders : [order]
+const ordersToConfirm = siblingOrders.length ? siblingOrders : [order]
 
-    for (const o of ordersToConfirm) {
-        await finalizeStock(o.product, o.count)
-        await Order.findByIdAndUpdate(o._id, { status: "оплачено" })
+for (const o of ordersToConfirm) {
+await finalizeStock(o.product, o.count)
+await Order.findByIdAndUpdate(o._id, { status: "оплачено" })
     }
 
-    const itemsList = ordersToConfirm
+const itemsList = ordersToConfirm
         .map(o => `🛒 ${o.product} — ${o.count} шт.`)
         .join("\n")
 
-    const grandTotal = ordersToConfirm.reduce((acc, o) => acc + (o.totalPrice || 0), 0)
+const grandTotal = ordersToConfirm.reduce((acc, o) => acc + (o.totalPrice || 0), 0)
 
-    const telegramResponse = await fetch(
-    `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+const telegramResponse = await fetch(
+`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
     {
-        method: "POST",
+method: "POST",
 
-        headers: {
-            "Content-Type": "application/json"
+headers: {
+"Content-Type": "application/json"
         },
 
-        body: JSON.stringify({
+body: JSON.stringify({
 
-            chat_id: order.telegramId,
+chat_id: order.telegramId,
 
-            text:
+text:
 `✅ Оплата подтверждена!
 
 Ваш заказ принят.
@@ -405,18 +406,18 @@ const telegramData = await telegramResponse.json()
 
 console.log(telegramData)
 
-    await Log.create({
+await Log.create({
 
-        user: req.session.user.username,
+user: req.session.user.username,
 
-        action: `Подтвердил оплату (${ordersToConfirm.length} поз.)`,
+action: `Подтвердил оплату (${ordersToConfirm.length} поз.)`,
 
-        orderId: order.orderCode
+orderId: order.orderCode
 
     })
 
-    res.json({
-        success: true
+res.json({
+success: true
     })
 
 })
@@ -430,44 +431,44 @@ console.log(telegramData)
 // в доступный пул для других клиентов, физический qty не трогаем.
 app.post("/reject-order/:id", checkAuth, async (req, res) => {
 
-    const order = await Order.findById(req.params.id)
+const order = await Order.findById(req.params.id)
 
-    if (!order) {
-        return res.status(404).json({
-            error: "Заказ не найден"
+if (!order) {
+return res.status(404).json({
+error: "Заказ не найден"
         })
     }
-    console.log("REJECT ORDER:", order)
+console.log("REJECT ORDER:", order)
 
-    // Находим ВСЕ товары этого заказа (делят один orderCode) — отклоняем
-    // и освобождаем резерв разом, отправляем клиенту ОДНО сообщение.
-    const siblingOrders = await Order.find({
-        orderCode: order.orderCode,
-        telegramId: order.telegramId,
-        status: "ожидание"
+// Находим ВСЕ товары этого заказа (делят один orderCode) — отклоняем
+// и освобождаем резерв разом, отправляем клиенту ОДНО сообщение.
+const siblingOrders = await Order.find({
+orderCode: order.orderCode,
+telegramId: order.telegramId,
+status: "ожидание"
     })
 
-    const ordersToReject = siblingOrders.length ? siblingOrders : [order]
+const ordersToReject = siblingOrders.length ? siblingOrders : [order]
 
-    for (const o of ordersToReject) {
-        await releaseStock(o.product, o.count)
-        await Order.findByIdAndUpdate(o._id, { status: "отклонено" })
+for (const o of ordersToReject) {
+await releaseStock(o.product, o.count)
+await Order.findByIdAndUpdate(o._id, { status: "отклонено" })
     }
 
-    const telegramResponse = await fetch(
-        `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+const telegramResponse = await fetch(
+`https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
         {
-            method: "POST",
+method: "POST",
 
-            headers: {
-                "Content-Type": "application/json"
+headers: {
+"Content-Type": "application/json"
             },
 
-            body: JSON.stringify({
+body: JSON.stringify({
 
-                chat_id: order.telegramId,
+chat_id: order.telegramId,
 
-                text:
+text:
 `❌ Заказ отклонён.
 
 Оплата не подтверждена.
@@ -477,22 +478,22 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
         }
     )
 
-    const telegramData = await telegramResponse.json()
+const telegramData = await telegramResponse.json()
 
-    console.log(telegramData)
+console.log(telegramData)
 
-    await Log.create({
+await Log.create({
 
-        user: req.session.user.username,
+user: req.session.user.username,
 
-        action: `Отклонил заказ (${ordersToReject.length} поз.)`,
+action: `Отклонил заказ (${ordersToReject.length} поз.)`,
 
-        orderId: order.orderCode
+orderId: order.orderCode
 
     })
 
-    res.json({
-        success: true
+res.json({
+success: true
     })
 
 })
@@ -508,40 +509,40 @@ app.post("/reject-order/:id", checkAuth, async (req, res) => {
 
 app.post("/issue-order/:id", checkAuth, async (req, res) => {
 
-    const order = await Order.findById(req.params.id)
+const order = await Order.findById(req.params.id)
 
-    if (!order) {
-        return res.status(404).json({
-            error: "Заказ не найден"
+if (!order) {
+return res.status(404).json({
+error: "Заказ не найден"
         })
     }
 
-    // Находим ВСЕ товары этого заказа (делят один orderCode) и выдаём
-    // разом — одним кликом на любой строке, а не по одной позиции.
-    const siblingOrders = await Order.find({
-        orderCode: order.orderCode,
-        telegramId: order.telegramId,
-        status: "оплачено"
+// Находим ВСЕ товары этого заказа (делят один orderCode) и выдаём
+// разом — одним кликом на любой строке, а не по одной позиции.
+const siblingOrders = await Order.find({
+orderCode: order.orderCode,
+telegramId: order.telegramId,
+status: "оплачено"
     })
 
-    const ordersToIssue = siblingOrders.length ? siblingOrders : [order]
+const ordersToIssue = siblingOrders.length ? siblingOrders : [order]
 
-    for (const o of ordersToIssue) {
-        await Order.findByIdAndUpdate(o._id, { status: "выдано" })
+for (const o of ordersToIssue) {
+await Order.findByIdAndUpdate(o._id, { status: "выдано" })
     }
 
-    await Log.create({
+await Log.create({
 
-        user: req.session.user.username,
+user: req.session.user.username,
 
-        action: `Выдал заказ (${ordersToIssue.length} поз.)`,
+action: `Выдал заказ (${ordersToIssue.length} поз.)`,
 
-        orderId: order.orderCode
+orderId: order.orderCode
 
     })
 
-    res.json({
-        success: true
+res.json({
+success: true
     })
 
 })
@@ -559,36 +560,36 @@ app.post("/issue-order/:id", checkAuth, async (req, res) => {
 
 app.post("/refund-order/:id", checkAuth, async (req, res) => {
 
-    const order = await Order.findById(req.params.id)
+const order = await Order.findById(req.params.id)
 
-    if (!order) {
-        return res.status(404).json({
-            error: "Заказ не найден"
+if (!order) {
+return res.status(404).json({
+error: "Заказ не найден"
         })
     }
 
-    await Order.findByIdAndUpdate(
-        req.params.id,
+await Order.findByIdAndUpdate(
+req.params.id,
         {
-            status: "возврат"
+status: "возврат"
         }
     )
 
-    // ⬇️ Возвращаем физический товар на склад
-    await restockStock(order.product, order.count)
+// ⬇️ Возвращаем физический товар на склад
+await restockStock(order.product, order.count)
 
-    await Log.create({
+await Log.create({
 
-        user: req.session.user.username,
+user: req.session.user.username,
 
-        action: "Возврат средств",
+action: "Возврат средств",
 
-        orderId: order.orderCode
+orderId: order.orderCode
 
     })
 
-    res.json({
-        success: true
+res.json({
+success: true
     })
 
 })
@@ -599,39 +600,39 @@ app.post("/refund-order/:id", checkAuth, async (req, res) => {
 
 app.post("/update-comment/:id", checkAuth, async (req, res) => {
 
-    try {
+try {
 
-        const order = await Order.findById(req.params.id)
+const order = await Order.findById(req.params.id)
 
-        if (!order) {
-            return res.status(404).json({
-                error: "Заказ не найден"
+if (!order) {
+return res.status(404).json({
+error: "Заказ не найден"
             })
         }
 
-        // Комментарий относится ко всему заказу клиента, а не к одной
-        // конкретной позиции — сохраняем его сразу во все товары
-        // с тем же orderCode, чтобы он был виден в "Подробнее" на любом из них.
-        await Order.updateMany(
+// Комментарий относится ко всему заказу клиента, а не к одной
+// конкретной позиции — сохраняем его сразу во все товары
+// с тем же orderCode, чтобы он был виден в "Подробнее" на любом из них.
+await Order.updateMany(
             {
-                orderCode: order.orderCode,
-                telegramId: order.telegramId
+orderCode: order.orderCode,
+telegramId: order.telegramId
             },
             {
-                comment: req.body.comment
+comment: req.body.comment
             }
         )
 
-        res.json({
-            success: true
+res.json({
+success: true
         })
 
     } catch (err) {
 
-        console.log(err)
+console.log(err)
 
-        res.status(500).json({
-            error: "Ошибка сохранения комментария"
+res.status(500).json({
+error: "Ошибка сохранения комментария"
         })
 
     }
@@ -644,10 +645,10 @@ app.post("/update-comment/:id", checkAuth, async (req, res) => {
 
 app.get("/logs", checkAuth, ownerOnly, async (req, res) => {
 
-    const logs = await Log.find()
+const logs = await Log.find()
         .sort({ createdAt: -1 })
 
-    res.json(logs)
+res.json(logs)
 
 })
 
@@ -666,43 +667,43 @@ app.use("/clients", checkAuth, clientsRouter)
 
 app.post("/save-client", async (req, res) => {
 
-    try {
+try {
 
-        const {
-            name,
-            phone,
-            username,
-            telegramId
+const {
+name,
+phone,
+username,
+telegramId
         } = req.body
 
-        await Client.findOneAndUpdate(
+await Client.findOneAndUpdate(
 
             { phone },
 
             {
-                name,
-                phone,
-                username,
-                telegramId
+name,
+phone,
+username,
+telegramId
             },
 
             {
-                upsert: true,
-                returnDocument: "after"
+upsert: true,
+returnDocument: "after"
             }
 
         )
 
-        res.json({
-            success: true
+res.json({
+success: true
         })
 
     } catch (err) {
 
-        console.error(err)
+console.error(err)
 
-        res.status(500).json({
-            error: "Ошибка сохранения клиента"
+res.status(500).json({
+error: "Ошибка сохранения клиента"
         })
 
     }
@@ -716,8 +717,8 @@ app.post("/save-client", async (req, res) => {
 
 app.get("/admin", checkAuth, (req, res) => {
 
-    res.sendFile(
-        path.join(__dirname, "views", "admin.html")
+res.sendFile(
+path.join(__dirname, "views", "admin.html")
     )
 
 })
@@ -728,10 +729,9 @@ app.get("/admin", checkAuth, (req, res) => {
 // ============================================================
 
 app.get("/admin/clients", checkAuth, ownerOnly, (req, res) => {
-    
 
-    res.sendFile(
-        path.join(__dirname, "views", "clients.html")
+res.sendFile(
+path.join(__dirname, "views", "clients.html")
     )
 
 })
@@ -742,8 +742,8 @@ app.get("/admin/clients", checkAuth, ownerOnly, (req, res) => {
 // ============================================================
 app.get("/admin/history", checkAuth, ownerOnly, (req, res) => {
 
-    res.sendFile(
-        path.join(__dirname, "views", "history.html")
+res.sendFile(
+path.join(__dirname, "views", "history.html")
     )
 
 })
@@ -754,8 +754,8 @@ app.get("/admin/history", checkAuth, ownerOnly, (req, res) => {
 
 app.get("/admin/warehouse", checkAuth, ownerOnly, (req, res) => {
 
-    res.sendFile(
-        path.join(__dirname, "views", "warehouse.html")
+res.sendFile(
+path.join(__dirname, "views", "warehouse.html")
     )
 
 })
@@ -767,8 +767,21 @@ app.get("/admin/warehouse", checkAuth, ownerOnly, (req, res) => {
 
 app.get("/admin/reports", checkAuth, ownerOnly, (req, res) => {
 
-    res.sendFile(
-        path.join(__dirname, "views", "reports.html")
+res.sendFile(
+path.join(__dirname, "views", "reports.html")
+    )
+
+})
+
+
+// ============================================================
+// EMPLOYEES PAGE
+// ============================================================
+
+app.get("/admin/employees", checkAuth, ownerOnly, (req, res) => {
+
+res.sendFile(
+path.join(__dirname, "views", "employees.html")
     )
 
 })
@@ -789,45 +802,52 @@ app.use("/admin", checkAuth, ownerOnly, reportsApiRouter)
 
 
 // ============================================================
+// EMPLOYEES API
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, employeesApiRouter)
+
+
+// ============================================================
 // AI
 // ============================================================
 
 app.post("/ai", checkAuth, async (req, res) => {
 
-    try {
+try {
 
-        const { message } = req.body
+const { message } = req.body
 
-        const ai = await openai.chat.completions.create({
+const ai = await openai.chat.completions.create({
 
-            model: "gpt-4.1-mini",
+model: "gpt-4.1-mini",
 
-            messages: [
+messages: [
 
                 {
-                    role: "system",
-                    content: "Ты менеджер магазина стройматериалов. Отвечай кратко и по делу."
+role: "system",
+content: "Ты менеджер магазина стройматериалов. Отвечай кратко и по делу."
                 },
 
                 {
-                    role: "user",
-                    content: message
+role: "user",
+content: message
                 }
 
             ]
 
         })
 
-        res.json({
-            reply: ai.choices[0].message.content
+res.json({
+reply: ai.choices[0].message.content
         })
 
     } catch (err) {
 
-        console.error("AI ERROR:", err)
+console.error("AI ERROR:", err)
 
-        res.status(500).json({
-            error: "Ошибка AI"
+res.status(500).json({
+error: "Ошибка AI"
         })
 
     }
@@ -843,8 +863,9 @@ const PORT = process.env.PORT || 3000
 
 app.listen(PORT, "0.0.0.0", () => {
 
-    console.log("🚀 OSCO SERVER STARTED")
+console.log("🚀 OSCO SERVER STARTED")
 
-    console.log(`🌍 PORT: ${PORT}`)
+console.log(`🌍 PORT: ${PORT}`)
+
 
 })

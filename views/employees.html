@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>OSCO — Сотрудники</title>
+<link rel="stylesheet" href="/style.css" />
+<link rel="stylesheet" href="/warehouse.css" />
+</head>
+<body>
+<div class="nav">
+<a class="nav-link" href="/admin">📦 Заказы</a>
+<a class="nav-link" href="/admin/clients">👥 Клиенты</a>
+<a class="nav-link" href="/admin/history">📜 История действий</a>
+<a class="nav-link" href="/admin/warehouse">📦 Склад</a>
+<a class="nav-link" href="/admin/reports">📊 Отчёты</a>
+<a class="nav-link active" href="/admin/employees">👷 Сотрудники</a>
+<a class="nav-link logout-link" href="/logout">Выйти</a>
+</div>
+
+<div class="warehouse-container">
+<main class="warehouse-content" style="width:100%;">
+<h1>👷 Сотрудники</h1>
+<p style="color:#8a8f98;margin-top:-10px;">Учёт испорченного/повреждённого товара по вине сотрудников</p>
+
+<div class="table-card" style="padding:18px 22px; margin-bottom:20px;">
+<h2 style="margin-top:0;">🤖 Быстрая запись</h2>
+<p style="color:#8a8f98; margin-top:-8px; font-size:13px;">
+Например: «Сергей эмульсия Rocks 7 кг разбил при разгрузке»
+</p>
+<div style="display:flex; gap:10px;">
+<input type="text" id="aiChatInput" class="warehouse-search" style="flex:1;" placeholder="Опишите словами, что случилось...">
+<button class="btn btn-primary" id="aiChatSend">Отправить</button>
+</div>
+<div id="aiChatResult" style="margin-top:14px;"></div>
+</div>
+
+<div class="warehouse-toolbar">
+<button class="btn btn-primary" id="addEmployeeBtn">+ Добавить сотрудника</button>
+</div>
+
+<div class="table-card">
+<h2>Список сотрудников</h2>
+<table class="warehouse-table">
+<thead>
+<tr>
+<th>Имя</th>
+<th>Должность</th>
+<th>Телефон</th>
+<th>Косяков</th>
+<th>Сумма убытка</th>
+<th>Действия</th>
+</tr>
+</thead>
+<tbody id="employeesBody">
+<tr><td colspan="6"><div class="empty-state">Загрузка...</div></td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="table-card" id="incidentsCard" style="display:none; margin-top:20px;">
+<h2 id="incidentsTitle">История</h2>
+<button class="btn btn-primary" id="addIncidentBtn" style="margin-bottom:14px;">+ Добавить косяк</button>
+<table class="warehouse-table">
+<thead>
+<tr>
+<th>Дата</th>
+<th>Товар</th>
+<th>Кол-во</th>
+<th>Убыток</th>
+<th>Причина</th>
+<th>Действия</th>
+</tr>
+</thead>
+<tbody id="incidentsBody"></tbody>
+</table>
+</div>
+
+</main>
+</div>
+
+<script src="/employees.js"></script>
+</body>
+</html>

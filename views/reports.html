@@ -11,127 +11,128 @@
 <body>
 
 <div class="nav">
-    <a class="nav-link" href="/admin">📦 Заказы</a>
-    <a class="nav-link" href="/admin/clients">👥 Клиенты</a>
-    <a class="nav-link" href="/admin/history">📜 История действий</a>
-    <a class="nav-link" href="/admin/warehouse">📦 Склад</a>
-    <a class="nav-link active" href="/admin/reports">📊 Отчёты</a>
-    <a class="nav-link logout-link" href="/logout">Выйти</a>
+<a class="nav-link" href="/admin">📦 Заказы</a>
+<a class="nav-link" href="/admin/clients">👥 Клиенты</a>
+<a class="nav-link" href="/admin/history">📜 История действий</a>
+<a class="nav-link" href="/admin/warehouse">📦 Склад</a>
+<a class="nav-link active" href="/admin/reports">📊 Отчёты</a>
+<a class="nav-link" href="/admin/employees">👷 Сотрудники</a>
+<a class="nav-link logout-link" href="/logout">Выйти</a>
 </div>
 
 <div class="reports-page">
 
-    <div class="reports-header">
-        <h1>Отчёты по продажам</h1>
-        <p class="subtitle">Сводная статистика по товарам</p>
-    </div>
+<div class="reports-header">
+<h1>Отчёты по продажам</h1>
+<p class="subtitle">Сводная статистика по товарам</p>
+</div>
 
-    <div class="reports-filters">
-        <button class="pill-btn active period-btn" data-period="today">Сегодня</button>
-        <button class="pill-btn period-btn" data-period="week">С начала недели</button>
-        <button class="pill-btn period-btn" data-period="month">С начала месяца</button>
+<div class="reports-filters">
+<button class="pill-btn active period-btn" data-period="today">Сегодня</button>
+<button class="pill-btn period-btn" data-period="week">С начала недели</button>
+<button class="pill-btn period-btn" data-period="month">С начала месяца</button>
 
-        <span class="divider-label">От</span>
-        <input type="date" id="dateFrom" class="date-input">
-        <span class="divider-label">До</span>
-        <input type="date" id="dateTo" class="date-input">
-        <button class="btn-show" id="customRangeBtn">Показать</button>
-    </div>
+<span class="divider-label">От</span>
+<input type="date" id="dateFrom" class="date-input">
+<span class="divider-label">До</span>
+<input type="date" id="dateTo" class="date-input">
+<button class="btn-show" id="customRangeBtn">Показать</button>
+</div>
 
-    <div class="period-label" id="periodLabel"></div>
+<div class="period-label" id="periodLabel"></div>
 
-    <div class="stat-cards-row">
-        <div class="stat-card-r">
-            <div class="stat-icon-r blue">📦</div>
-            <div>
-                <div class="stat-label-r">Продано товаров</div>
-                <div class="stat-value-r" id="stat-qty">0 шт</div>
-            </div>
-        </div>
-        <div class="stat-card-r">
-            <div class="stat-icon-r green">📈</div>
-            <div>
-                <div class="stat-label-r">Выручка</div>
-                <div class="stat-value-r money" id="stat-revenue">0</div>
-            </div>
-        </div>
-        <div class="stat-card-r">
-            <div class="stat-icon-r orange">📋</div>
-            <div>
-                <div class="stat-label-r">Заказов</div>
-                <div class="stat-value-r" id="stat-orders">0</div>
-            </div>
-        </div>
-        <div class="stat-card-r">
-            <div class="stat-icon-r red">💳</div>
-            <div>
-                <div class="stat-label-r">Средний чек</div>
-                <div class="stat-value-r money" id="stat-avg">0</div>
-            </div>
-        </div>
-        <div class="stat-card-r">
-            <div class="stat-icon-r green">💵</div>
-            <div>
-                <div class="stat-label-r">Чистая прибыль</div>
-                <div class="stat-value-r money" id="stat-profit">0</div>
-            </div>
-        </div>
-    </div>
-    <div class="period-label" id="profitWarning" style="display:none;"></div>
+<div class="stat-cards-row">
+<div class="stat-card-r">
+<div class="stat-icon-r blue">📦</div>
+<div>
+<div class="stat-label-r">Продано товаров</div>
+<div class="stat-value-r" id="stat-qty">0 шт</div>
+</div>
+</div>
+<div class="stat-card-r">
+<div class="stat-icon-r green">📈</div>
+<div>
+<div class="stat-label-r">Выручка</div>
+<div class="stat-value-r money" id="stat-revenue">0</div>
+</div>
+</div>
+<div class="stat-card-r">
+<div class="stat-icon-r orange">📋</div>
+<div>
+<div class="stat-label-r">Заказов</div>
+<div class="stat-value-r" id="stat-orders">0</div>
+</div>
+</div>
+<div class="stat-card-r">
+<div class="stat-icon-r red">💳</div>
+<div>
+<div class="stat-label-r">Средний чек</div>
+<div class="stat-value-r money" id="stat-avg">0</div>
+</div>
+</div>
+<div class="stat-card-r">
+<div class="stat-icon-r green">💵</div>
+<div>
+<div class="stat-label-r">Чистая прибыль</div>
+<div class="stat-value-r money" id="stat-profit">0</div>
+</div>
+</div>
+</div>
+<div class="period-label" id="profitWarning" style="display:none;"></div>
 
-    <div class="charts-row">
-        <div class="chart-card">
-            <h2>Продажи по дням</h2>
-            <canvas id="dailyChart" height="90"></canvas>
-        </div>
-        <div class="chart-card">
-            <h2>По категориям</h2>
-            <canvas id="categoryChart" height="90"></canvas>
-        </div>
-    </div>
+<div class="charts-row">
+<div class="chart-card">
+<h2>Продажи по дням</h2>
+<canvas id="dailyChart" height="90"></canvas>
+</div>
+<div class="chart-card">
+<h2>По категориям</h2>
+<canvas id="categoryChart" height="90"></canvas>
+</div>
+</div>
 
-    <div class="table-card-r">
-        <div class="table-card-r-header">
-            <h2>Продано по товарам</h2>
-            <div class="table-controls">
-                <input type="text" id="searchInput" class="search-box-r" placeholder="Поиск товара">
-                <select id="categorySelect" class="sort-select-r">
-                    <option value="all">Все категории</option>
-                </select>
-                <select id="sortSelect" class="sort-select-r">
-                    <option value="count">По количеству</option>
-                    <option value="sum">По выручке</option>
-                    <option value="name">По названию</option>
-                </select>
-            </div>
-        </div>
+<div class="table-card-r">
+<div class="table-card-r-header">
+<h2>Продано по товарам</h2>
+<div class="table-controls">
+<input type="text" id="searchInput" class="search-box-r" placeholder="Поиск товара">
+<select id="categorySelect" class="sort-select-r">
+<option value="all">Все категории</option>
+</select>
+<select id="sortSelect" class="sort-select-r">
+<option value="count">По количеству</option>
+<option value="sum">По выручке</option>
+<option value="name">По названию</option>
+</select>
+</div>
+</div>
 
-        <div class="category-leader" id="categoryLeader" style="display:none;"></div>
+<div class="category-leader" id="categoryLeader" style="display:none;"></div>
 
-        <table class="reports-table">
-            <thead>
-                <tr>
-                    <th>№</th>
-                    <th>Товар</th>
-                    <th>Категория</th>
-                    <th>Продано</th>
-                    <th>Заказов</th>
-                    <th>Средняя цена</th>
-                    <th>Выручка</th>
-                    <th>Прибыль</th>
-                    <th>Доля</th>
-                </tr>
-            </thead>
-            <tbody id="reportBody">
-                <tr><td colspan="9" class="empty-row">Загрузка...</td></tr>
-            </tbody>
-        </table>
+<table class="reports-table">
+<thead>
+<tr>
+<th>№</th>
+<th>Товар</th>
+<th>Категория</th>
+<th>Продано</th>
+<th>Заказов</th>
+<th>Средняя цена</th>
+<th>Выручка</th>
+<th>Прибыль</th>
+<th>Доля</th>
+</tr>
+</thead>
+<tbody id="reportBody">
+<tr><td colspan="9" class="empty-row">Загрузка...</td></tr>
+</tbody>
+</table>
 
-        <div class="table-footer-r">
-            <span id="footerInfo"></span>
-            <div class="pagination-r" id="pagination"></div>
-        </div>
-    </div>
+<div class="table-footer-r">
+<span id="footerInfo"></span>
+<div class="pagination-r" id="pagination"></div>
+</div>
+</div>
 
 </div>
 
