@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import OpenAI from "openai";
 import Employee from "../models/Employee.js";
 import Incident from "../models/Incident.js";
@@ -7,6 +8,12 @@ import Product from "../models/Product.js";
 const router = express.Router();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+// Экранируем спецсимволы регулярки, чтобы скобки/точки в названиях
+// товаров ("Цемент (Гежуба М450)") не ломали поиск.
+function escapeRegex(str) {
+    return String(str || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 // ---------- POST /admin/api/incidents/parse ----------
 // Разбирает свободную фразу ("Сергей эмульсия Rocks 7 кг разбил") на
@@ -43,15 +50,27 @@ router.post('/api/incidents/parse', express.json(), async (req, res) => {
         }
 
         const employeeMatches = await Employee.find({
-            name: { $regex: parsed.employeeName || "", $options: "i" }
+            name: { $regex: escapeRegex(parsed.employeeName || ""), $options: "i" }
         }).limit(5);
 
-        const productMatches = await Product.find({
+        // Ищем товар по каждому слову запроса отдельно (а не по фразе целиком),
+        // чтобы порядок слов и пунктуация ("Цемент (Гежуба М450)" vs
+        // "Гежуба М450 Цемент") не мешали найти совпадение.
+        const words = String(parsed.productQuery || "")
+            .split(/\s+/)
+            .map(w => w.trim())
+            .filter(Boolean);
+
+        const wordConditions = words.map(w => ({
             $or: [
-                { name: { $regex: parsed.productQuery || "", $options: "i" } },
-                { code: { $regex: parsed.productQuery || "", $options: "i" } }
+                { name: { $regex: escapeRegex(w), $options: "i" } },
+                { code: { $regex: escapeRegex(w), $options: "i" } }
             ]
-        }).limit(5);
+        }));
+
+        const productMatches = wordConditions.length
+            ? await Product.find({ $and: wordConditions }).limit(5)
+            : [];
 
         res.json({
             parsed,
@@ -148,6 +167,187 @@ router.get('/api/employees/:id/incidents', async (req, res) => {
     } catch (err) {
         console.error("EMPLOYEES incidents list error:", err);
         res.status(500).json({ error: "Ошибка загрузки истории" });
+    }
+});
+
+// ---------- GET /admin/api/incidents/categories ----------
+// Список категорий товаров — для фильтра на странице сотрудников.
+router.get('/api/incidents/categories', async (req, res) => {
+    try {
+        const categories = await Product.distinct('category');
+        res.json(categories.filter(Boolean).sort());
+    } catch (err) {
+        console.error("INCIDENTS categories error:", err);
+        res.status(500).json({ error: "Ошибка загрузки категорий" });
+    }
+});
+
+function buildIncidentMatchStage({ dateFrom, dateTo, employeeId, search }) {
+    const match = {};
+
+    if (dateFrom || dateTo) {
+        match.createdAt = {};
+        if (dateFrom) match.createdAt.$gte = new Date(`${dateFrom}T00:00:00`);
+        if (dateTo) match.createdAt.$lte = new Date(`${dateTo}T23:59:59`);
+    }
+
+    if (employeeId) {
+        match.employee = mongoose.Types.ObjectId.isValid(employeeId)
+            ? new mongoose.Types.ObjectId(employeeId)
+            : null; // некорректный id — просто ничего не найдёт
+    }
+
+    if (search && search.trim()) {
+        const re = { $regex: escapeRegex(search.trim()), $options: "i" };
+        match.$or = [
+            { employeeName: re },
+            { productName: re },
+            { productCode: re },
+            { reason: re }
+        ];
+    }
+
+    return match;
+}
+
+// ---------- GET /admin/api/incidents/list ----------
+// Общий список инцидентов (не по одному сотруднику) с фильтрами и пагинацией —
+// для главной таблицы на странице "Сотрудники".
+router.get('/api/incidents/list', async (req, res) => {
+    try {
+        const {
+            dateFrom, dateTo, employeeId, category, search,
+            page = 1, limit = 6
+        } = req.query;
+
+        const match = buildIncidentMatchStage({ dateFrom, dateTo, employeeId, search });
+        const pageNum = Math.max(1, Number(page) || 1);
+        const limitNum = Math.max(1, Number(limit) || 6);
+
+        const pipeline = [
+            { $match: match },
+            {
+                $lookup: {
+                    from: "products",
+                    localField: "productCode",
+                    foreignField: "code",
+                    as: "product"
+                }
+            },
+            { $unwind: { path: "$product", preserveNullAndEmptyArray: true } }
+        ];
+
+        if (category && category !== "all") {
+            pipeline.push({ $match: { "product.category": category } });
+        }
+
+        pipeline.push(
+            { $sort: { createdAt: -1 } },
+            {
+                $facet: {
+                    items: [
+                        { $skip: (pageNum - 1) * limitNum },
+                        { $limit: limitNum },
+                        {
+                            $project: {
+                                _id: 1,
+                                createdAt: 1,
+                                employee: 1,
+                                employeeName: 1,
+                                productCode: 1,
+                                productName: 1,
+                                unit: 1,
+                                quantity: 1,
+                                lossValue: 1,
+                                reason: 1,
+                                category: "$product.category"
+                            }
+                        }
+                    ],
+                    totalCount: [{ $count: "count" }]
+                }
+            }
+        );
+
+        const [result] = await Incident.aggregate(pipeline);
+        const items = result?.items || [];
+        const total = result?.totalCount?.[0]?.count || 0;
+
+        res.json({
+            items,
+            total,
+            page: pageNum,
+            limit: limitNum,
+            totalPages: Math.max(1, Math.ceil(total / limitNum))
+        });
+    } catch (err) {
+        console.error("INCIDENTS list error:", err);
+        res.status(500).json({ error: "Ошибка загрузки записей" });
+    }
+});
+
+// ---------- GET /admin/api/incidents/stats ----------
+// Сводка для карточек сверху + сайдбар (топ-5 сотрудников, топ-3 товара).
+router.get('/api/incidents/stats', async (req, res) => {
+    try {
+        const { dateFrom, dateTo } = req.query;
+        const match = buildIncidentMatchStage({ dateFrom, dateTo });
+
+        const [totalEmployees, totals, topEmployees, topProducts] = await Promise.all([
+            Employee.countDocuments(),
+
+            Incident.aggregate([
+                { $match: match },
+                {
+                    $group: {
+                        _id: null,
+                        totalLoss: { $sum: { $ifNull: ["$lossValue", 0] } },
+                        totalIncidents: { $sum: 1 }
+                    }
+                }
+            ]),
+
+            Incident.aggregate([
+                { $match: match },
+                {
+                    $group: {
+                        _id: "$employee",
+                        name: { $first: "$employeeName" },
+                        totalLoss: { $sum: { $ifNull: ["$lossValue", 0] } }
+                    }
+                },
+                { $sort: { totalLoss: -1 } },
+                { $limit: 5 }
+            ]),
+
+            Incident.aggregate([
+                { $match: match },
+                {
+                    $group: {
+                        _id: "$productCode",
+                        name: { $first: "$productName" },
+                        totalLoss: { $sum: { $ifNull: ["$lossValue", 0] } }
+                    }
+                },
+                { $sort: { totalLoss: -1 } },
+                { $limit: 3 }
+            ])
+        ]);
+
+        const totalLoss = totals[0]?.totalLoss || 0;
+        const totalIncidents = totals[0]?.totalIncidents || 0;
+
+        res.json({
+            totalEmployees,
+            totalLoss,
+            totalIncidents,
+            avgLossPerEmployee: totalEmployees > 0 ? Math.round(totalLoss / totalEmployees) : 0,
+            topEmployees: topEmployees.map(e => ({ id: e._id?.toString(), name: e.name, totalLoss: e.totalLoss })),
+            topProducts: topProducts.map(p => ({ code: p._id, name: p.name, totalLoss: p.totalLoss }))
+        });
+    } catch (err) {
+        console.error("INCIDENTS stats error:", err);
+        res.status(500).json({ error: "Ошибка загрузки статистики" });
     }
 });
 

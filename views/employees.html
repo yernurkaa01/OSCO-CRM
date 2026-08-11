@@ -8,72 +8,128 @@
 </head>
 <body>
 <div class="nav">
-<a class="nav-link" href="/admin">📦 Заказы</a>
-<a class="nav-link" href="/admin/clients">👥 Клиенты</a>
-<a class="nav-link" href="/admin/history">📜 История действий</a>
-<a class="nav-link" href="/admin/warehouse">📦 Склад</a>
-<a class="nav-link" href="/admin/reports">📊 Отчёты</a>
-<a class="nav-link active" href="/admin/employees">👷 Сотрудники</a>
-<a class="nav-link logout-link" href="/logout">Выйти</a>
+  <a class="nav-link" href="/admin">📦 Заказы</a>
+  <a class="nav-link" href="/admin/clients">👥 Клиенты</a>
+  <a class="nav-link" href="/admin/history">📜 История действий</a>
+  <a class="nav-link" href="/admin/warehouse">📦 Склад</a>
+  <a class="nav-link" href="/admin/reports">📊 Отчёты</a>
+  <a class="nav-link active" href="/admin/employees">👷 Сотрудники</a>
+  <a class="nav-link logout-link" href="/logout">Выйти</a>
 </div>
 
-<div class="warehouse-container">
+<div class="warehouse-container" style="display:block;">
 <main class="warehouse-content" style="width:100%;">
-<h1>👷 Сотрудники</h1>
-<p style="color:#8a8f98;margin-top:-10px;">Учёт испорченного/повреждённого товара по вине сотрудников</p>
 
-<div class="table-card" style="padding:18px 22px; margin-bottom:20px;">
-<h2 style="margin-top:0;">🤖 Быстрая запись</h2>
-<p style="color:#8a8f98; margin-top:-8px; font-size:13px;">
-Например: «Сергей эмульсия Rocks 7 кг разбил при разгрузке»
-</p>
-<div style="display:flex; gap:10px;">
-<input type="text" id="aiChatInput" class="warehouse-search" style="flex:1;" placeholder="Опишите словами, что случилось...">
-<button class="btn btn-primary" id="aiChatSend">Отправить</button>
-</div>
-<div id="aiChatResult" style="margin-top:14px;"></div>
-</div>
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px;">
+    <div>
+      <h1 style="margin-bottom:2px;">👷 Сотрудники</h1>
+      <p style="color:#8a8f98; margin:0;">Журнал учёта испорченного/повреждённого товара по вине сотрудников</p>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <button class="btn" id="manageEmployeesBtn">👤 Сотрудники</button>
+      <button class="btn btn-primary" id="addIncidentBtn">+ Добавить запись</button>
+    </div>
+  </div>
 
-<div class="warehouse-toolbar">
-<button class="btn btn-primary" id="addEmployeeBtn">+ Добавить сотрудника</button>
-</div>
+  <!-- Карточки статистики -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-icon blue">👤</div>
+      <div>
+        <div class="stat-label">Всего сотрудников</div>
+        <div class="stat-value" id="statTotalEmployees">—</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon red">⚠️</div>
+      <div>
+        <div class="stat-label">Всего убытков за период</div>
+        <div class="stat-value" id="statTotalLoss">—</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon green">📦</div>
+      <div>
+        <div class="stat-label">Всего записей</div>
+        <div class="stat-value" id="statTotalIncidents">—</div>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon orange">📊</div>
+      <div>
+        <div class="stat-label">Средний убыток на сотрудника</div>
+        <div class="stat-value" id="statAvgLoss">—</div>
+      </div>
+    </div>
+  </div>
 
-<div class="table-card">
-<h2>Список сотрудников</h2>
-<table class="warehouse-table">
-<thead>
-<tr>
-<th>Имя</th>
-<th>Должность</th>
-<th>Телефон</th>
-<th>Косяков</th>
-<th>Сумма убытка</th>
-<th>Действия</th>
-</tr>
-</thead>
-<tbody id="employeesBody">
-<tr><td colspan="6"><div class="empty-state">Загрузка...</div></td></tr>
-</tbody>
-</table>
-</div>
+  <div class="employees-layout">
+    <div class="employees-main">
 
-<div class="table-card" id="incidentsCard" style="display:none; margin-top:20px;">
-<h2 id="incidentsTitle">История</h2>
-<button class="btn btn-primary" id="addIncidentBtn" style="margin-bottom:14px;">+ Добавить косяк</button>
-<table class="warehouse-table">
-<thead>
-<tr>
-<th>Дата</th>
-<th>Товар</th>
-<th>Кол-во</th>
-<th>Убыток</th>
-<th>Причина</th>
-<th>Действия</th>
-</tr>
-</thead>
-<tbody id="incidentsBody"></tbody>
-</table>
-</div>
+      <!-- Быстрый ввод через AI -->
+      <div class="table-card" style="padding:18px 22px; margin-bottom:20px;">
+        <h2 style="margin-top:0;">🤖 Быстрый ввод через AI</h2>
+        <p style="color:#8a8f98; margin-top:-8px; font-size:13px;">
+          Просто напишите что случилось — AI найдёт сотрудника, товар и цену
+        </p>
+        <div style="display:flex; gap:10px;">
+          <input type="text" id="aiChatInput" class="warehouse-search" style="flex:1;" placeholder="Например: Сергей разбил эмульсию Rocks 7кг">
+          <button class="btn btn-primary" id="aiChatSend">✨ Анализировать</button>
+        </div>
+        <div id="aiChatResult" style="margin-top:14px;"></div>
+      </div>
+
+      <!-- Фильтры -->
+      <div class="warehouse-toolbar">
+        <input type="text" id="filterSearch" class="warehouse-search" placeholder="Поиск по сотруднику, товару, причине...">
+        <input type="date" id="filterDateFrom" class="warehouse-select">
+        <input type="date" id="filterDateTo" class="warehouse-select">
+        <select id="filterEmployee" class="warehouse-select">
+          <option value="">Все сотрудники</option>
+        </select>
+        <select id="filterCategory" class="warehouse-select">
+          <option value="all">Все категории</option>
+        </select>
+        <button class="btn" id="filterReset">Сбросить</button>
+      </div>
+
+      <div class="table-card">
+        <table class="warehouse-table">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Сотрудник</th>
+              <th>Товар</th>
+              <th>Кол-во</th>
+              <th>Причина</th>
+              <th>Сумма убытка</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="incidentsBody">
+            <tr><td colspan="7"><div class="empty-state">Загрузка...</div></td></tr>
+          </tbody>
+        </table>
+        <div class="table-footer">
+          <div id="incidentsCount">Показано 0 из 0 записей</div>
+          <div class="pagination" id="incidentsPagination"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <aside class="employees-side">
+      <div class="table-card side-panel">
+        <h2>Убытки по сотрудникам</h2>
+        <ol class="side-list" id="topEmployeesList"></ol>
+      </div>
+
+      <div class="table-card side-panel">
+        <h2>Топ товаров по убыткам</h2>
+        <ul class="side-list" id="topProductsList"></ul>
+      </div>
+    </aside>
+  </div>
 
 </main>
 </div>
