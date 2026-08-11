@@ -234,7 +234,7 @@ router.get('/api/incidents/list', async (req, res) => {
                     as: "product"
                 }
             },
-            { $unwind: { path: "$product", preserveNullAndEmptyArray: true } }
+            { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } }
         ];
 
         if (category && category !== "all") {

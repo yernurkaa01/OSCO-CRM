@@ -95,8 +95,19 @@
     const body = document.getElementById('incidentsBody');
     body.innerHTML = `<tr><td colspan="7"><div class="empty-state">Загрузка...</div></td></tr>`;
 
-    const res = await fetch(`${API}/incidents/list?${params.toString()}`);
-    const data = await res.json();
+    let data;
+    try {
+      const res = await fetch(`${API}/incidents/list?${params.toString()}`);
+      data = await res.json();
+      if (!res.ok || !Array.isArray(data.items)) {
+        throw new Error(data.error || 'Ошибка загрузки');
+      }
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="7"><div class="empty-state">Не удалось загрузить записи. Попробуйте обновить страницу.</div></td></tr>`;
+      document.getElementById('incidentsCount').textContent = '';
+      document.getElementById('incidentsPagination').innerHTML = '';
+      return;
+    }
 
     if (!data.items.length) {
       body.innerHTML = `<tr><td colspan="7"><div class="empty-state">Записей не найдено</div></td></tr>`;
