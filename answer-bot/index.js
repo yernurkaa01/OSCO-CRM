@@ -1,9 +1,5 @@
 // ============================================================
 // answer-bot/index.js — БОТ-ОТВЕЧАТЕЛЬ
-// Отдельный от основного бота-заказчика. Отвечает на повседневные
-// вопросы (открыт ли магазин, есть ли товар, сколько стоит) —
-// НЕ принимает заказы, НЕ резервирует товар. Смотрит в ту же базу
-// данных, что и вся CRM — всегда актуальные остатки и цены.
 // ============================================================
 
 import "dotenv/config"
@@ -20,12 +16,19 @@ mongoose.connect(process.env.MONGO_URI)
 const bot = new Telegraf(process.env.ANSWER_BOT_TOKEN)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-// Ссылка на бота, который реально принимает заказы (замени на username)
-const ORDER_BOT_USERNAME = "@ernurzhan_stroy_marketBot"
+const ORDER_BOT_USERNAME = "@Ernurzhan_stroy_market"
 
-// Часы работы магазина — можно дробным числом: 18.5 = 18:30
-const OPEN_HOUR = 9
-const CLOSE_HOUR = 18.5
+// Расписание работы по дням недели (0 = воскресенье, 1 = понедельник, ... 6 = суббота)
+// Без выходных — каждый день работаем, но воскресенье короче.
+const SCHEDULE = {
+    0: { open: 10, close: 16 },     // воскресенье
+    1: { open: 9, close: 18.5 },    // понедельник
+    2: { open: 9, close: 18.5 },
+    3: { open: 9, close: 18.5 },
+    4: { open: 9, close: 18.5 },
+    5: { open: 9, close: 18.5 },
+    6: { open: 9, close: 18.5 }     // суббота
+}
 
 function formatHour(h) {
     const hours = Math.floor(h)
@@ -33,18 +36,31 @@ function formatHour(h) {
     return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
 }
 
-function isShopOpen() {
+function getAlmatyNow() {
     const now = new Date()
-    const almatyHour = (now.getUTCHours() + 5) % 24 // грубо, под Алматы (UTC+5)
-    const minutes = now.getUTCMinutes()
+    // Грубый пересчёт в Алматы (UTC+5) — без учёта возможных изменений
+    // часового пояса сервера
+    const almatyHour = (now.getUTCHours() + 5) % 24
+    const dayShift = Math.floor((now.getUTCHours() + 5) / 24)
+    const almatyDay = (now.getUTCDay() + dayShift) % 7
+    return { day: almatyDay, hour: almatyHour, minute: now.getUTCMinutes() }
+}
 
-    // Считаем время в минутах от полуночи — так дробные часы (18.5 = 18:30)
-    // сравниваются точно, а не только по целому часу.
-    const currentMinutes = almatyHour * 60 + minutes
-    const openMinutes = OPEN_HOUR * 60
-    const closeMinutes = CLOSE_HOUR * 60
+function isShopOpen() {
+    const { day, hour, minute } = getAlmatyNow()
+    const todaySchedule = SCHEDULE[day]
+
+    const currentMinutes = hour * 60 + minute
+    const openMinutes = todaySchedule.open * 60
+    const closeMinutes = todaySchedule.close * 60
 
     return currentMinutes >= openMinutes && currentMinutes < closeMinutes
+}
+
+function todayScheduleText() {
+    const { day } = getAlmatyNow()
+    const s = SCHEDULE[day]
+    return `${formatHour(s.open)}–${formatHour(s.close)}`
 }
 
 process.on("unhandledRejection", (err) => {
@@ -53,9 +69,9 @@ process.on("unhandledRejection", (err) => {
 
 bot.start((ctx) => {
     return ctx.reply(
-        "👋 Привет! Я отвечаю на вопросы про наш магазин — открыт ли, есть ли товар, сколько стоит.\n\n" +
-        `Чтобы оформить заказ — пишите ${ORDER_BOT_USERNAME}\n\n` +
-        "Спросите что-нибудь, например: «есть цемент?» или «работаете сегодня?»"
+        "👋 Сәлем! Мен дүкен туралы сұрақтарға жауап беремін — ашық па, тауар бар ма, бағасы қанша.\n\n" +
+        `Тапсырыс беру үшін — ${ORDER_BOT_USERNAME} жазыңыз\n\n` +
+        "Бірдеңе сұраңыз, мысалы: «цемент бар ма?» немесе «бүгін жұмыс істейсіздер ме?»"
     )
 })
 
@@ -64,15 +80,15 @@ bot.command("id", (ctx) => ctx.reply(`ID: ${ctx.chat.id}`))
 bot.on("text", async (ctx) => {
     const text = ctx.message.text.trim().toLowerCase()
 
-    // ---- открыт ли магазин ----
-    if (/(открыт|работа|часы|график|режим)/i.test(text)) {
+    // ---- дүкен ашық па ----
+    if (/(ашық|жұмыс|график|уақыт|сағат)/i.test(text)) {
         const status = isShopOpen()
-            ? `✅ Мы сейчас работаем! Часы работы: ${formatHour(OPEN_HOUR)}–${formatHour(CLOSE_HOUR)}.`
-            : `😴 Сейчас мы закрыты. Часы работы: ${formatHour(OPEN_HOUR)}–${formatHour(CLOSE_HOUR)}.`
+            ? `✅ Біз қазір жұмыс істеп жатырмыз! Бүгінгі жұмыс уақыты: ${todayScheduleText()}.`
+            : `😴 Қазір жабықпыз. Бүгінгі жұмыс уақыты: ${todayScheduleText()}.`
         return ctx.reply(status)
     }
 
-    // ---- прямой поиск по названию/коду ----
+    // ---- тікелей іздеу атауы/коды бойынша ----
     const direct = await Product.find({
         $or: [
             { name: { $regex: text, $options: "i" } },
@@ -86,12 +102,12 @@ bot.on("text", async (ctx) => {
 
     if (direct.length > 1) {
         return ctx.reply(
-            "Нашёл несколько вариантов, уточните:\n\n" +
+            "Бірнеше нұсқа таптым, нақтылаңыз:\n\n" +
             direct.map((p, i) => `${i + 1}. ${p.name}`).join("\n")
         )
     }
 
-    // ---- прямого совпадения нет — подключаем AI для нечёткого поиска ----
+    // ---- тікелей сәйкестік жоқ — AI арқылы іздейміз ----
     try {
         const allNames = await Product.find({}, { name: 1, code: 1 }).limit(300)
         const catalogList = allNames.map(p => `${p.code}: ${p.name}`).join("\n")
@@ -102,11 +118,11 @@ bot.on("text", async (ctx) => {
                 {
                     role: "system",
                     content:
-                        `Ты помощник магазина стройматериалов. Клиент написал сообщение — ` +
-                        `найди среди списка товаров (код: название) до 3 наиболее похожих по смыслу. ` +
-                        `Отвечай ТОЛЬКО JSON-массивом кодов без пояснений: ["P045","S01"]. ` +
-                        `Если ничего подходящего нет — верни пустой массив [].\n\n` +
-                        `Список товаров:\n${catalogList}`
+                        `Сен құрылыс материалдары дүкенінің көмекшісісің. Клиент хабарлама жазды — ` +
+                        `тауарлар тізімінен (код: атауы) мағынасы жағынан ең ұқсас 3-ке дейін тауар тап. ` +
+                        `Тек JSON-массив кодтарын қайтар, түсініктемесіз: ["P045","S01"]. ` +
+                        `Ешнәрсе сәйкес келмесе — бос массив қайтар: [].\n\n` +
+                        `Тауарлар тізімі:\n${catalogList}`
                 },
                 { role: "user", content: text }
             ]
@@ -121,39 +137,39 @@ bot.on("text", async (ctx) => {
 
         if (!codes.length) {
             return ctx.reply(
-                "😔 Не нашёл подходящий товар. Попробуйте написать название иначе, " +
-                "или уточните у менеджера."
+                "😔 Сәйкес тауар табылмады. Атауын басқаша жазып көріңіз, " +
+                "немесе менеджерден сұраңыз."
             )
         }
 
         const matches = await Product.find({ code: { $in: codes } })
 
         if (matches.length === 1) {
-            await ctx.reply("Вы, наверное, имели в виду:")
+            await ctx.reply("Сіз мынаны айтқан болуыңыз мүмкін:")
             return replyWithProduct(ctx, matches[0])
         }
 
         return ctx.reply(
-            "Возможно, вы имели в виду один из этих товаров:\n\n" +
+            "Сіз мына тауарлардың бірін айтқан болуыңыз мүмкін:\n\n" +
             matches.map((p, i) => `${i + 1}. ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸`).join("\n") +
-            "\n\nНапишите точное название для подробностей."
+            "\n\nНақты атауын жазыңыз, толығырақ білу үшін."
         )
 
     } catch (e) {
         console.error("Answer-bot AI error:", e)
-        return ctx.reply("⚠️ Не удалось обработать запрос, попробуйте ещё раз.")
+        return ctx.reply("⚠️ Сұрауды өңдеу мүмкін болмады, қайталап көріңіз.")
     }
 })
 
 async function replyWithProduct(ctx, p) {
     const available = Math.max(0, p.qty - (p.reservedQty || 0))
-    const status = available > 0 ? `✅ В наличии: ${available} ${p.unit}` : "😔 Сейчас нет в наличии"
+    const status = available > 0 ? `✅ Қоймада бар: ${available} ${p.unit}` : "😔 Қазір қоймада жоқ"
 
     return ctx.reply(
         `📦 ${p.name}\n` +
-        `💰 Цена: ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}\n` +
+        `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}\n` +
         `${status}\n\n` +
-        `Чтобы заказать — пишите ${ORDER_BOT_USERNAME}`
+        `Тапсырыс беру үшін — ${ORDER_BOT_USERNAME} жазыңыз`
     )
 }
 
