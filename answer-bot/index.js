@@ -66,6 +66,11 @@ process.on("unhandledRejection", (err) => {
     console.error("Answer-bot: необработанная ошибка:", err)
 })
 
+// Короткая память "что показали последним" — чтобы клиент мог ответить
+// просто номером ("3") и получить именно тот товар, а не новый поиск
+// с нуля. Не полноценное состояние диалога — только последний список.
+const lastOptions = {}   // { [chatId]: [productDoc, ...] }
+
 bot.start((ctx) => {
     return ctx.reply(
         "👋 Сәлем! Мен дүкен туралы сұрақтарға жауап беремін — ашық па, тауар бар ма, бағасы қанша.\n\n" +
@@ -76,10 +81,24 @@ bot.start((ctx) => {
 bot.command("id", (ctx) => ctx.reply(`ID: ${ctx.chat.id}`))
 
 bot.on("text", async (ctx) => {
-    const text = ctx.message.text.trim().toLowerCase()
+    const rawText = ctx.message.text.trim()
+    const text = rawText.toLowerCase()
+    const chatId = ctx.chat.id
 
-    // ---- дүкен ашық па ----
-    if (/(ашық|жұмыс|график|уақыт|сағат)/i.test(text)) {
+    // ---- Клиент отвечает номером на ранее показанный список ----
+    // Понимает и просто "3", и скопированную строку "3. Цемент... — 2 550 ₸"
+    const numberMatch = rawText.match(/^(\d+)/)
+    if (numberMatch && lastOptions[chatId]) {
+        const idx = parseInt(numberMatch[1], 10) - 1
+        const chosen = lastOptions[chatId][idx]
+        if (chosen) {
+            delete lastOptions[chatId]
+            return replyWithProduct(ctx, chosen)
+        }
+    }
+
+    // ---- дүкен ашық па / қашан ашылады ----
+    if (/(ашық|ашыл|жұмыс|график|уақыт|сағат|қашан)/i.test(text)) {
         const status = isShopOpen()
             ? `✅ Біз қазір жұмыс істеп жатырмыз! Бүгінгі жұмыс уақыты: ${todayScheduleText()}.`
             : `😴 Қазір жабықпыз. Бүгінгі жұмыс уақыты: ${todayScheduleText()}.`
@@ -104,8 +123,9 @@ bot.on("text", async (ctx) => {
     }
 
     if (direct.length > 1) {
+        lastOptions[chatId] = direct
         return ctx.reply(
-            "Бірнеше нұсқа таптым, нақтылаңыз:\n\n" +
+            "Бірнеше нұсқа таптым, нақтылаңыз (нөмірін жазыңыз):\n\n" +
             direct.map((p, i) => `${i + 1}. ${p.name}`).join("\n")
         )
     }
@@ -153,10 +173,12 @@ bot.on("text", async (ctx) => {
             return replyWithProduct(ctx, matches[0])
         }
 
+        lastOptions[chatId] = matches
+
         return ctx.reply(
-            "Сіз мына тауарлардың бірін айтқан болуыңыз мүмкін:\n\n" +
+            "Сіз мына тауарлардың бірін айтқан болуыңыз мүмкін (нөмірін жазыңыз):\n\n" +
             matches.map((p, i) => `${i + 1}. ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸`).join("\n") +
-            "\n\nНақты атауын жазыңыз, толығырақ білу үшін."
+            "\n\nНомерін немесе нақты атауын жазыңыз."
         )
 
     } catch (e) {
