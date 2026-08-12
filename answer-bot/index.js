@@ -1,13 +1,15 @@
 // ============================================================
 // answer-bot/index.js — БОТ-ОТВЕЧАТЕЛЬ
+// Отвечает на вопросы: работает ли магазин, есть ли товар,
+// сколько стоит. Прямой поиск + AI для нечётких запросов.
+// БЕЗ упоминания оформления заказа — только справочная информация.
 // ============================================================
 
 import "dotenv/config"
-import { Telegraf, Markup } from "telegraf"
+import { Telegraf } from "telegraf"
 import mongoose from "mongoose"
 import OpenAI from "openai"
 import Product from "../models/Product.js"
-import Category from "../models/category.js"
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("Answer-bot: MongoDB подключен"))
@@ -16,10 +18,7 @@ mongoose.connect(process.env.MONGO_URI)
 const bot = new Telegraf(process.env.ANSWER_BOT_TOKEN)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-const ORDER_BOT_USERNAME = "@Ernurzhan_stroy_market"
-
 // Расписание работы по дням недели (0 = воскресенье, 1 = понедельник, ... 6 = суббота)
-// Без выходных — каждый день работаем, но воскресенье короче.
 const SCHEDULE = {
     0: { open: 10, close: 16 },     // воскресенье
     1: { open: 9, close: 18.5 },    // понедельник
@@ -38,8 +37,6 @@ function formatHour(h) {
 
 function getAlmatyNow() {
     const now = new Date()
-    // Грубый пересчёт в Алматы (UTC+5) — без учёта возможных изменений
-    // часового пояса сервера
     const almatyHour = (now.getUTCHours() + 5) % 24
     const dayShift = Math.floor((now.getUTCHours() + 5) / 24)
     const almatyDay = (now.getUTCDay() + dayShift) % 7
@@ -70,7 +67,6 @@ process.on("unhandledRejection", (err) => {
 bot.start((ctx) => {
     return ctx.reply(
         "👋 Сәлем! Мен дүкен туралы сұрақтарға жауап беремін — ашық па, тауар бар ма, бағасы қанша.\n\n" +
-        `Тапсырыс беру үшін — ${ORDER_BOT_USERNAME} жазыңыз\n\n` +
         "Бірдеңе сұраңыз, мысалы: «цемент бар ма?» немесе «бүгін жұмыс істейсіздер ме?»"
     )
 })
@@ -109,8 +105,8 @@ bot.on("text", async (ctx) => {
 
     // ---- тікелей сәйкестік жоқ — AI арқылы іздейміз ----
     try {
-        const allNames = await Product.find({}, { name: 1, code: 1 }).limit(300)
-        const catalogList = allNames.map(p => `${p.code}: ${p.name}`).join("\n")
+        const allProducts = await Product.find({}, { name: 1, code: 1, category: 1 }).limit(300)
+        const catalogList = allProducts.map(p => `${p.code}: ${p.name} [категория: ${p.category}]`).join("\n")
 
         const ai = await openai.chat.completions.create({
             model: "gpt-4.1-mini",
@@ -119,7 +115,9 @@ bot.on("text", async (ctx) => {
                     role: "system",
                     content:
                         `Сен құрылыс материалдары дүкенінің көмекшісісің. Клиент хабарлама жазды — ` +
-                        `тауарлар тізімінен (код: атауы) мағынасы жағынан ең ұқсас 3-ке дейін тауар тап. ` +
+                        `тауарлар тізімінен (код: атауы [категория]) мағынасы жағынан ең ұқсас 3-ке дейін тауар тап. ` +
+                        `Клиент категория атауын жазуы мүмкін (мысалы "эмульсия", "цемент") — бұл жағдайда ` +
+                        `сол категориядағы тауарларды ұсын. ` +
                         `Тек JSON-массив кодтарын қайтар, түсініктемесіз: ["P045","S01"]. ` +
                         `Ешнәрсе сәйкес келмесе — бос массив қайтар: [].\n\n` +
                         `Тауарлар тізімі:\n${catalogList}`
@@ -137,8 +135,7 @@ bot.on("text", async (ctx) => {
 
         if (!codes.length) {
             return ctx.reply(
-                "😔 Сәйкес тауар табылмады. Атауын басқаша жазып көріңіз, " +
-                "немесе менеджерден сұраңыз."
+                "😔 Сәйкес тауар табылмады. Атауын басқаша жазып көріңіз."
             )
         }
 
@@ -168,8 +165,7 @@ async function replyWithProduct(ctx, p) {
     return ctx.reply(
         `📦 ${p.name}\n` +
         `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}\n` +
-        `${status}\n\n` +
-        `Тапсырыс беру үшін — ${ORDER_BOT_USERNAME} жазыңыз`
+        `${status}`
     )
 }
 
