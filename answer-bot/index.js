@@ -10,6 +10,8 @@ import { Telegraf } from "telegraf"
 import mongoose from "mongoose"
 import OpenAI from "openai"
 import Product from "../models/Product.js"
+import Category from "../models/category.js"
+import { generateCatalogPdf } from "../services/generateCatalogPdf.js"
 
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("Answer-bot: MongoDB подключен"))
@@ -82,6 +84,11 @@ bot.on("text", async (ctx) => {
             ? `✅ Біз қазір жұмыс істеп жатырмыз! Бүгінгі жұмыс уақыты: ${todayScheduleText()}.`
             : `😴 Қазір жабықпыз. Бүгінгі жұмыс уақыты: ${todayScheduleText()}.`
         return ctx.reply(status)
+    }
+
+    // ---- каталог сұрауы ----
+    if (/(катало)/i.test(text)) {
+        return handleCatalogRequest(ctx, text)
     }
 
     // ---- тікелей іздеу атауы/коды бойынша ----
@@ -167,6 +174,51 @@ async function replyWithProduct(ctx, p) {
         `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}\n` +
         `${status}`
     )
+}
+
+// Обрабатывает запрос каталога: если в сообщении упомянута конкретная
+// категория — шлёт PDF только по ней; если нет — шлёт полный каталог
+// по всем товарам сразу.
+async function handleCatalogRequest(ctx, text) {
+    try {
+        const categories = await Category.find()
+
+        // Ищем, не упомянута ли в сообщении конкретная категория
+        const matchedCategory = categories.find(c =>
+            text.includes(c.name.toLowerCase())
+        )
+
+        if (matchedCategory) {
+            const products = await Product.find({ category: matchedCategory.name }).sort({ code: 1 })
+
+            if (!products.length) {
+                return ctx.reply(`«${matchedCategory.name}» санатында тауар жоқ.`)
+            }
+
+            const pdfBuffer = await generateCatalogPdf(matchedCategory.name, products)
+            return ctx.replyWithDocument(
+                { source: pdfBuffer, filename: `catalog_${matchedCategory.name}.pdf` },
+                { caption: `📖 «${matchedCategory.name}» каталогы` }
+            )
+        }
+
+        // Категория нақтыланбаған — толық каталогты жібереміз
+        const allProducts = await Product.find({}).sort({ category: 1, code: 1 })
+
+        if (!allProducts.length) {
+            return ctx.reply("Дүкенде тауарлар әлі қосылмаған.")
+        }
+
+        const pdfBuffer = await generateCatalogPdf("Барлық тауарлар", allProducts)
+        return ctx.replyWithDocument(
+            { source: pdfBuffer, filename: "catalog_full.pdf" },
+            { caption: "📖 Толық каталог" }
+        )
+
+    } catch (e) {
+        console.error("Answer-bot catalog error:", e)
+        return ctx.reply("⚠️ Каталогты жіберу мүмкін болмады, қайталап көріңіз.")
+    }
 }
 
 async function launchWithRetry(retryDelayMs = 10000) {
