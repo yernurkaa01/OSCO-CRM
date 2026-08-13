@@ -6,7 +6,7 @@
   let allEmployees = []; // для селектов и модалки управления
 
   function formatMoney(n) {
-    return Number(n || 0).toLocaleString('ru-RU') + ' ₸';
+    return Number(n || 0).toLocaleString('ru-RU') + ' \u20B8';
   }
 
   function formatDate(iso) {
@@ -23,7 +23,6 @@
     };
   }
 
-  // ---------- Статистика + сайдбар ----------
   async function loadStats() {
     const { dateFrom, dateTo } = getFilters();
     const params = new URLSearchParams();
@@ -79,7 +78,6 @@
     });
   }
 
-  // ---------- Основная таблица ----------
   async function loadIncidents() {
     const { search, dateFrom, dateTo, employeeId, category } = getFilters();
     const params = new URLSearchParams({
@@ -124,7 +122,7 @@
           </td>
           <td>
             <div class="row-actions">
-              <button title="Удалить (вернуть товар на склад)" onclick="Employees.deleteIncident('${i._id}')">🗑️</button>
+              <button title="Удалить (вернуть товар на склад)" onclick="Employees.deleteIncident('${i._id}')">\u{1F5D1}\uFE0F</button>
             </div>
           </td>
         </tr>
@@ -133,7 +131,7 @@
 
     const from = data.total === 0 ? 0 : (data.page - 1) * data.limit + 1;
     const to = Math.min(data.page * data.limit, data.total);
-    document.getElementById('incidentsCount').textContent = `Показано ${from}–${to} из ${data.total} записей`;
+    document.getElementById('incidentsCount').textContent = `Показано ${from}\u2013${to} из ${data.total} записей`;
 
     renderPagination(data.page, data.totalPages);
   }
@@ -142,17 +140,17 @@
     const el = document.getElementById('incidentsPagination');
     if (totalPages <= 1) { el.innerHTML = ''; return; }
 
-    let html = `<button ${page <= 1 ? 'disabled' : ''} data-page="${page - 1}">‹ Назад</button>`;
+    let html = `<button ${page <= 1 ? 'disabled' : ''} data-page="${page - 1}">\u2039 Назад</button>`;
 
     const pages = new Set([1, totalPages, page, page - 1, page + 1].filter(p => p >= 1 && p <= totalPages));
     let prev = 0;
     [...pages].sort((a, b) => a - b).forEach(p => {
-      if (prev && p - prev > 1) html += `<span style="padding:0 4px;">…</span>`;
+      if (prev && p - prev > 1) html += `<span style="padding:0 4px;">\u2026</span>`;
       html += `<button class="${p === page ? 'active' : ''}" data-page="${p}">${p}</button>`;
       prev = p;
     });
 
-    html += `<button ${page >= totalPages ? 'disabled' : ''} data-page="${page + 1}">Далее ›</button>`;
+    html += `<button ${page >= totalPages ? 'disabled' : ''} data-page="${page + 1}">Далее \u203a</button>`;
     el.innerHTML = html;
 
     el.querySelectorAll('button[data-page]').forEach(btn => {
@@ -168,7 +166,6 @@
     loadIncidents();
   }
 
-  // ---------- Фильтры ----------
   ['filterSearch', 'filterDateFrom', 'filterDateTo', 'filterEmployee', 'filterCategory'].forEach(id => {
     document.getElementById(id).addEventListener('change', () => { currentPage = 1; refreshAll(); });
   });
@@ -191,7 +188,6 @@
     refreshAll();
   }
 
-  // ---------- Загрузка справочников для фильтров/селектов ----------
   async function loadEmployeeOptions() {
     const res = await fetch(`${API}/employees`);
     allEmployees = await res.json();
@@ -214,7 +210,6 @@
     select.value = currentVal || 'all';
   }
 
-  // ---------- Модалка управления сотрудниками (добавить/удалить) ----------
   function openManageEmployeesModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -233,8 +228,8 @@
     function renderList() {
       overlay.querySelector('#mgmtList').innerHTML = allEmployees.map(e => `
         <div class="cat-row">
-          <span>${e.name}${e.position ? ` — <span style="color:#8a8f98;">${e.position}</span>` : ''}</span>
-          <button title="Удалить" data-id="${e.id}">🗑️</button>
+          <span>${e.name}${e.position ? ` \u2014 <span style="color:#8a8f98;">${e.position}</span>` : ''}</span>
+          <button title="Удалить" data-id="${e.id}">\u{1F5D1}\uFE0F</button>
         </div>
       `).join('') || '<div style="color:#8a8f98;padding:8px 0;">Сотрудников пока нет</div>';
 
@@ -286,32 +281,50 @@
 
     overlay.querySelector('#empCancel').onclick = () => overlay.remove();
 
-    overlay.querySelector('#empSave').onclick = async () => {
+    const saveBtn = overlay.querySelector('#empSave');
+    let isSaving = false;
+
+    saveBtn.onclick = async () => {
+      if (isSaving) return;
+      isSaving = true;
+      saveBtn.disabled = true;
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Сохранение\u2026';
+
       const name = overlay.querySelector('#newEmpName').value.trim();
-      if (!name) { alert('Укажите имя'); return; }
-
-      const res = await fetch(`${API}/employees`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name,
-          position: overlay.querySelector('#newEmpPosition').value.trim(),
-          phone: overlay.querySelector('#newEmpPhone').value.trim()
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Ошибка добавления');
+      if (!name) {
+        alert('Укажите имя');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
         return;
       }
 
-      overlay.remove();
-      if (onDone) onDone();
+      try {
+        const res = await fetch(`${API}/employees`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            position: overlay.querySelector('#newEmpPosition').value.trim(),
+            phone: overlay.querySelector('#newEmpPhone').value.trim()
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Ошибка добавления');
+          isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+          return;
+        }
+
+        overlay.remove();
+        if (onDone) onDone();
+      } catch (e) {
+        alert('Ошибка сети, попробуйте ещё раз');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+      }
     };
   }
 
-  // ---------- Модалка ручного добавления записи ----------
   function openAddIncidentModal() {
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -363,7 +376,7 @@
 
         overlay.querySelector('#incProductResults').innerHTML = data.items.map(p => `
           <div style="padding:8px;cursor:pointer;border-bottom:1px solid #f2f2f2;" data-code="${p.code}" data-name="${p.name}" class="inc-product-option">
-            ${p.code || '-'} — ${p.name} (остаток: ${p.qty} ${p.unit})
+            ${p.code || '-'} \u2014 ${p.name} (остаток: ${p.qty} ${p.unit})
           </div>
         `).join('') || '<div style="padding:8px;color:#aaa;">Ничего не найдено</div>';
 
@@ -378,34 +391,60 @@
       }, 250);
     });
 
-    overlay.querySelector('#incSave').onclick = async () => {
+    const saveBtn = overlay.querySelector('#incSave');
+    let isSaving = false;
+
+    saveBtn.onclick = async () => {
+      if (isSaving) return;
+      isSaving = true;
+      saveBtn.disabled = true;
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Сохранение\u2026';
+
       const employeeId = overlay.querySelector('#incEmployee').value;
       const productCode = overlay.querySelector('#incProductCode').value;
       const quantity = Number(overlay.querySelector('#incQty').value);
       const reason = overlay.querySelector('#incReason').value.trim();
 
-      if (!employeeId) { alert('Выберите сотрудника'); return; }
-      if (!productCode) { alert('Выберите товар из списка'); return; }
-      if (!quantity || quantity <= 0) { alert('Укажите корректное количество'); return; }
-
-      const res = await fetch(`${API}/incidents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, productCode, quantity, reason })
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Ошибка сохранения');
+      if (!employeeId) {
+        alert('Выберите сотрудника');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+        return;
+      }
+      if (!productCode) {
+        alert('Выберите товар из списка');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+        return;
+      }
+      if (!quantity || quantity <= 0) {
+        alert('Укажите корректное количество');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
         return;
       }
 
-      overlay.remove();
-      refreshAll();
+      try {
+        const res = await fetch(`${API}/incidents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId, productCode, quantity, reason })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Ошибка сохранения');
+          isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+          return;
+        }
+
+        overlay.remove();
+        refreshAll();
+      } catch (e) {
+        alert('Ошибка сети, попробуйте ещё раз');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+      }
     };
   }
 
-  // ---------- AI-чат: быстрая запись косяка через свободную фразу ----------
   async function sendAiChat() {
     const input = document.getElementById('aiChatInput');
     const text = input.value.trim();
@@ -439,12 +478,12 @@
     const { parsed, employeeMatches, productMatches } = data;
 
     if (!employeeMatches.length) {
-      resultEl.innerHTML = `<div style="color:#c0392b;">Сотрудник «${parsed.employeeName}» не найден. Сначала добавьте его через кнопку «Сотрудники».</div>`;
+      resultEl.innerHTML = `<div style="color:#c0392b;">Сотрудник \u00AB${parsed.employeeName}\u00BB не найден. Сначала добавьте его через кнопку \u00ABСотрудники\u00BB.</div>`;
       return;
     }
 
     if (!productMatches.length) {
-      resultEl.innerHTML = `<div style="color:#c0392b;">Товар «${parsed.productQuery}» не найден на складе.</div>`;
+      resultEl.innerHTML = `<div style="color:#c0392b;">Товар \u00AB${parsed.productQuery}\u00BB не найден на складе.</div>`;
       return;
     }
 
@@ -454,7 +493,7 @@
 
     const productOptions = productMatches.map(p => {
       const priceLabel = p.purchasePrice != null ? formatMoney(p.purchasePrice) : 'закупочная цена не указана';
-      return `<option value="${p.code}" data-purchase="${p.purchasePrice ?? ''}" data-unit="${p.unit}">${p.name} — ${priceLabel} (остаток: ${p.qty} ${p.unit})</option>`;
+      return `<option value="${p.code}" data-purchase="${p.purchasePrice ?? ''}" data-unit="${p.unit}">${p.name} \u2014 ${priceLabel} (остаток: ${p.qty} ${p.unit})</option>`;
     }).join('');
 
     resultEl.innerHTML = `
@@ -474,7 +513,7 @@
         <div id="aiConfirmLossPreview" style="margin:8px 0; color:#2551d9; font-weight:600;"></div>
         <div class="modal-actions" style="margin-top:10px;">
           <button id="aiConfirmCancel">Отмена</button>
-          <button id="aiConfirmSave" class="btn btn-primary">✅ Подтвердить</button>
+          <button id="aiConfirmSave" class="btn btn-primary">\u2705 Подтвердить</button>
         </div>
       </div>
     `;
@@ -500,27 +539,42 @@
       document.getElementById('aiChatInput').value = '';
     };
 
-    document.getElementById('aiConfirmSave').onclick = async () => {
+    const confirmBtn = document.getElementById('aiConfirmSave');
+    let isSaving = false;
+
+    confirmBtn.onclick = async () => {
+      if (isSaving) return;
+      isSaving = true;
+      confirmBtn.disabled = true;
+      const originalText = confirmBtn.textContent;
+      confirmBtn.textContent = 'Сохранение\u2026';
+
       const employeeId = document.getElementById('aiConfirmEmployee').value;
       const productCode = document.getElementById('aiConfirmProduct').value;
       const quantity = Number(document.getElementById('aiConfirmQty').value);
       const reason = document.getElementById('aiConfirmReason').value.trim();
 
-      const saveRes = await fetch(`${API}/incidents`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ employeeId, productCode, quantity, reason })
-      });
+      try {
+        const saveRes = await fetch(`${API}/incidents`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ employeeId, productCode, quantity, reason })
+        });
 
-      if (!saveRes.ok) {
-        const err = await saveRes.json().catch(() => ({}));
-        alert(err.error || 'Ошибка сохранения');
-        return;
+        if (!saveRes.ok) {
+          const err = await saveRes.json().catch(() => ({}));
+          alert(err.error || 'Ошибка сохранения');
+          isSaving = false; confirmBtn.disabled = false; confirmBtn.textContent = originalText;
+          return;
+        }
+
+        resultEl.innerHTML = '<div style="color:#1a9d52;">\u2705 Записано</div>';
+        document.getElementById('aiChatInput').value = '';
+        refreshAll();
+      } catch (e) {
+        alert('Ошибка сети, попробуйте ещё раз');
+        isSaving = false; confirmBtn.disabled = false; confirmBtn.textContent = originalText;
       }
-
-      resultEl.innerHTML = '<div style="color:#1a9d52;">✅ Записано</div>';
-      document.getElementById('aiChatInput').value = '';
-      refreshAll();
     };
   }
 
@@ -534,7 +588,6 @@
 
   window.Employees = { deleteIncident };
 
-  // ---------- Инициализация ----------
   (async function init() {
     await Promise.all([loadEmployeeOptions(), loadCategoryOptions()]);
     refreshAll();

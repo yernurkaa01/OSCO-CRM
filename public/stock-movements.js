@@ -102,32 +102,55 @@
       }, 250);
     });
 
-    overlay.querySelector('#inSave').onclick = async () => {
+    const saveBtn = overlay.querySelector('#inSave');
+    let isSaving = false;
+
+    saveBtn.onclick = async () => {
+      if (isSaving) return;
+      isSaving = true;
+      saveBtn.disabled = true;
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Сохранение…';
+
       const productCode = overlay.querySelector('#inCode').value;
       const quantity = Number(overlay.querySelector('#inQty').value);
-      if (!productCode) { alert('Выберите товар'); return; }
-      if (!quantity || quantity <= 0) { alert('Укажите количество'); return; }
-
-      const res = await fetch(`${API}/incoming`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productCode,
-          quantity,
-          purchasePrice: overlay.querySelector('#inPrice').value,
-          supplier: overlay.querySelector('#inSupplier').value,
-          note: overlay.querySelector('#inNote').value
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Ошибка сохранения');
+      if (!productCode) {
+        alert('Выберите товар');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+        return;
+      }
+      if (!quantity || quantity <= 0) {
+        alert('Укажите количество');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
         return;
       }
 
-      overlay.remove();
-      load();
+      try {
+        const res = await fetch(`${API}/incoming`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productCode,
+            quantity,
+            purchasePrice: overlay.querySelector('#inPrice').value,
+            supplier: overlay.querySelector('#inSupplier').value,
+            note: overlay.querySelector('#inNote').value
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Ошибка сохранения');
+          isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+          return;
+        }
+
+        overlay.remove();
+        load();
+      } catch (e) {
+        alert('Ошибка сети, попробуйте ещё раз');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+      }
     };
   }
 
@@ -181,31 +204,54 @@
       }, 250);
     });
 
-    overlay.querySelector('#outSave').onclick = async () => {
+    const saveBtn = overlay.querySelector('#outSave');
+    let isSaving = false;
+
+    saveBtn.onclick = async () => {
+      if (isSaving) return;
+      isSaving = true;
+      saveBtn.disabled = true;
+      const originalText = saveBtn.textContent;
+      saveBtn.textContent = 'Сохранение…';
+
       const productCode = overlay.querySelector('#outCode').value;
       const quantity = Number(overlay.querySelector('#outQty').value);
-      if (!productCode) { alert('Выберите товар'); return; }
-      if (!quantity || quantity <= 0) { alert('Укажите количество'); return; }
-
-      const res = await fetch(`${API}/outgoing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          productCode,
-          quantity,
-          reason: overlay.querySelector('#outReason').value,
-          note: overlay.querySelector('#outNote').value
-        })
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        alert(err.error || 'Ошибка сохранения');
+      if (!productCode) {
+        alert('Выберите товар');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+        return;
+      }
+      if (!quantity || quantity <= 0) {
+        alert('Укажите количество');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
         return;
       }
 
-      overlay.remove();
-      load();
+      try {
+        const res = await fetch(`${API}/outgoing`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productCode,
+            quantity,
+            reason: overlay.querySelector('#outReason').value,
+            note: overlay.querySelector('#outNote').value
+          })
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          alert(err.error || 'Ошибка сохранения');
+          isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+          return;
+        }
+
+        overlay.remove();
+        load();
+      } catch (e) {
+        alert('Ошибка сети, попробуйте ещё раз');
+        isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
+      }
     };
   }
 
