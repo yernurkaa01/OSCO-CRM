@@ -62,6 +62,10 @@ function todayScheduleText() {
     return `${formatHour(s.open)}–${formatHour(s.close)}`
 }
 
+function escapeRegex(str) {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
 process.on("unhandledRejection", (err) => {
     console.error("Answer-bot: необработанная ошибка:", err)
 })
@@ -97,6 +101,12 @@ bot.on("text", async (ctx) => {
         }
     }
 
+    // Слишком короткое/бессмысленное сообщение (случайный символ, пробел,
+    // знак препинания) — не запускаем поиск вообще, просто просим уточнить.
+    if (text.replace(/[^a-zа-яё0-9]/gi, "").length < 2) {
+        return ctx.reply("Не совсем понял вопрос — напишите название товара или спросите про часы работы.")
+    }
+
     // ---- дүкен ашық па / қашан ашылады ----
     if (/(ашық|ашыл|жұмыс|график|уақыт|сағат|қашан)/i.test(text)) {
         const status = isShopOpen()
@@ -111,10 +121,11 @@ bot.on("text", async (ctx) => {
     }
 
     // ---- тікелей іздеу атауы/коды бойынша ----
+    const safeText = escapeRegex(text)
     const direct = await Product.find({
         $or: [
-            { name: { $regex: text, $options: "i" } },
-            { code: { $regex: text, $options: "i" } }
+            { name: { $regex: safeText, $options: "i" } },
+            { code: { $regex: safeText, $options: "i" } }
         ]
     }).limit(5)
 
@@ -162,7 +173,7 @@ bot.on("text", async (ctx) => {
 
         if (!codes.length) {
             return ctx.reply(
-                "😔 Сәйкес тауар табылмады. Атауын басқаша жазып көріңіз."
+                "😔 Кешіріңіз, дүкенімізде мұндай тауар жоқ."
             )
         }
 
