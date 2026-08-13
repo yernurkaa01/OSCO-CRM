@@ -21,6 +21,7 @@ import clientsRouter from "./routes/clients.js"
 import warehouseApiRouter from "./routes/warehouse.js"
 import reportsApiRouter from "./routes/reports.js"
 import employeesApiRouter from "./routes/employees.js"
+import stockMovementsApiRouter from "./routes/stockMovements.js"
 import { finalizeStock, releaseStock, restockStock } from "./services/stockCheck.js"
 
 
@@ -788,6 +789,19 @@ path.join(__dirname, "views", "employees.html")
 
 
 // ============================================================
+// STOCK MOVEMENTS PAGE
+// ============================================================
+
+app.get("/admin/stock-movements", checkAuth, ownerOnly, (req, res) => {
+
+res.sendFile(
+path.join(__dirname, "views", "stock-movements.html")
+    )
+
+})
+
+
+// ============================================================
 // WAREHOUSE API
 // ============================================================
 
@@ -806,6 +820,13 @@ app.use("/admin", checkAuth, ownerOnly, reportsApiRouter)
 // ============================================================
 
 app.use("/admin", checkAuth, ownerOnly, employeesApiRouter)
+
+
+// ============================================================
+// STOCK MOVEMENTS API
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, stockMovementsApiRouter)
 
 
 // ============================================================

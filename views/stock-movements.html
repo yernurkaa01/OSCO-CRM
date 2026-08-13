@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>OSCO — Движение товара</title>
+<link rel="stylesheet" href="/style.css" />
+<link rel="stylesheet" href="/warehouse.css" />
+</head>
+<body>
+<div class="nav">
+<a class="nav-link" href="/admin">📦 Заказы</a>
+<a class="nav-link" href="/admin/clients">👥 Клиенты</a>
+<a class="nav-link" href="/admin/history">📜 История действий</a>
+<a class="nav-link" href="/admin/warehouse">📦 Склад</a>
+<a class="nav-link" href="/admin/reports">📊 Отчёты</a>
+<a class="nav-link" href="/admin/employees">👷 Сотрудники</a>
+<a class="nav-link active" href="/admin/stock-movements">🔄 Движение товара</a>
+<a class="nav-link logout-link" href="/logout">Выйти</a>
+</div>
+
+<div class="warehouse-container">
+<main class="warehouse-content" style="width:100%;">
+<h1>🔄 Движение товара</h1>
+<p style="color:#8a8f98;margin-top:-10px;">Приход новых партий и ручное списание (брак, порча, возврат поставщику)</p>
+
+<div class="warehouse-toolbar">
+<button class="btn btn-primary" id="addIncomingBtn">➕ Оприходовать</button>
+<button class="btn" id="addOutgoingBtn">➖ Списать</button>
+</div>
+
+<div class="table-card">
+<h2>История движения</h2>
+<table class="warehouse-table">
+<thead>
+<tr>
+<th>Дата</th>
+<th>Тип</th>
+<th>Товар</th>
+<th>Количество</th>
+<th>Причина / Поставщик</th>
+<th>Остаток после</th>
+<th>Кто внёс</th>
+</tr>
+</thead>
+<tbody id="movementsBody">
+<tr><td colspan="7"><div class="empty-state">Загрузка...</div></td></tr>
+</tbody>
+</table>
+</div>
+
+</main>
+</div>
+
+<script src="/stock-movements.js"></script>
+</body>
+</html>
