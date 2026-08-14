@@ -11,11 +11,10 @@
       width: 56px;
       height: 56px;
       border-radius: 50%;
-      background: #2551d9;
-      color: #fff;
+      background: transparent;
       border: none;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(37,81,217,0.4);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
       z-index: 9998;
       display: flex;
       align-items: center;
@@ -24,9 +23,10 @@
       overflow: hidden;
     }
     #aiWidgetBtn img {
-      width: 32px;
-      height: 32px;
-      object-fit: contain;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scale(1.6);
     }
     #aiWidgetPanel {
       position: fixed;
