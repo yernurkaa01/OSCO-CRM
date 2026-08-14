@@ -103,16 +103,24 @@
             const rowNumber = start + i + 1;
             const isTop5 = top5Ids.has(item.product);
 
+            // Без единицы измерения не приклеиваем лишний пробел/дефис —
+            // просто показываем количество.
+            const qtyDisplay = item.unit ? `${item.totalCount} ${item.unit}` : `${item.totalCount}`;
+
+            const categoryDisplay = item.isDeleted
+                ? `<span style="color:#aaa;font-style:italic;" title="Этот товар был продан, но позже удалён со склада">${item.category}</span>`
+                : item.category;
+
             const profitDisplay = item.profit === null
                 ? '<span style="color:#aaa;">нет данных</span>'
                 : `<span class="money">${formatMoney(item.profit)}</span>`;
 
             return `
-                <tr class="${isTop5 ? 'top5-row' : ''}">
+                <tr class="${isTop5 ? 'top5-row' : ''}${item.isDeleted ? ' deleted-row' : ''}">
                     <td class="row-number">${rowNumber}</td>
                     <td>${isTop5 ? '<span class="top5-badge">ТОП</span>' : ''}${item.product}</td>
-                    <td>${item.category}</td>
-                    <td>${item.totalCount} ${item.unit}</td>
+                    <td>${categoryDisplay}</td>
+                    <td>${qtyDisplay}</td>
                     <td>${item.orders}</td>
                     <td>${formatMoney(avgPrice)}</td>
                     <td class="money">${formatMoney(item.totalSum)}</td>

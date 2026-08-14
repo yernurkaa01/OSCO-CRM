@@ -104,9 +104,18 @@ router.get('/api/reports/sales', async (req, res) => {
             const byName = !s.sampleCode ? infoByName[s.sampleName] : null;
             const info = byCode || byName;
 
+            // Товар мог быть продан, а потом удалён со склада (или
+            // переименован без сохранённого кода в старых заказах) — в этом
+            // случае карточка не находится. Помечаем это явно, а не
+            // подсовываем фейковую категорию "Другое" и голый дефис вместо
+            // единицы измерения — это выглядело как ошибка данных.
+            const isDeleted = !info;
+
             // Прибыль считаем по ТЕКУЩЕЙ закупочной цене товара — история
             // изменений закупочной цены во времени не хранится, так что для
             // старых продаж это приближение, а не абсолютно точная цифра.
+            // Если товар удалён, закупочная цена недоступна — прибыль
+            // посчитать нечем.
             const purchasePrice = info?.purchasePrice;
             const hasCost = purchasePrice !== undefined && purchasePrice !== null;
             const profit = hasCost ? s.totalSum - (purchasePrice * s.totalCount) : null;
@@ -119,8 +128,9 @@ router.get('/api/reports/sales', async (req, res) => {
                 // Если код не сохранён (старый заказ) — используем текст,
                 // который был записан в заказе на тот момент.
                 product: info?.name || s.sampleName,
-                unit: info?.unit || "-",
-                category: info?.category || "Другое",
+                unit: info?.unit || "",
+                category: info?.category || "Товар удалён",
+                isDeleted,
                 totalCount: s.totalCount,
                 totalSum: s.totalSum,
                 profit,
