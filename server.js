@@ -22,6 +22,7 @@ import warehouseApiRouter from "./routes/warehouse.js"
 import reportsApiRouter from "./routes/reports.js"
 import employeesApiRouter from "./routes/employees.js"
 import stockMovementsApiRouter from "./routes/stockMovements.js"
+import assistantApiRouter from "./routes/assistant.js"
 import { finalizeStock, releaseStock, restockStock } from "./services/stockCheck.js"
 
 
@@ -827,6 +828,13 @@ app.use("/admin", checkAuth, ownerOnly, employeesApiRouter)
 // ============================================================
 
 app.use("/admin", checkAuth, ownerOnly, stockMovementsApiRouter)
+
+
+// ============================================================
+// ASSISTANT API (внутренний AI-помощник по данным CRM)
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, assistantApiRouter)
 
 
 // ============================================================
