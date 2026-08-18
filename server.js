@@ -72,14 +72,14 @@ maxAge: 1000 * 60 * 60 * 24
 
 const USERS = [
     {
-username: "admin",   // Нуртуган 
-password: "osco_00",
+username: process.env.ADMIN_USER,   // Нуртуган 
+password: process.env.ADMIN_PASS,
 role: "owner"
     },
 
     {
-username: "cashier1",  // Женисбек
-password: "osco_01",
+username: process.env.CASHIER_USER,  // Женисбек
+password: process.env.CASHIER_PASS,
 role: "cashier"
     }
 ]
