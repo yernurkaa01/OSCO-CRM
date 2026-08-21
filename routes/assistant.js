@@ -33,26 +33,46 @@ async function getProductsByPrice(comparison, price) {
     return products.map(p => ({ name: p.name, code: p.code, price: p.price }));
 }
 
-async function getOrdersByDate(date, productName) {
-    const from = new Date(date + "T00:00:00");
-    const to = new Date(date + "T23:59:59");
+// Магазин работает по алматинскому времени (UTC+5) — фиксируем это явно
+// в границах дня, а не полагаемся на часовой пояс сервера (Render обычно
+// в UTC). Иначе заказы у полуночи могут "уехать" в соседний день.
+function getAlmatyDayRange(dateStr) {
+    const from = new Date(`${dateStr}T00:00:00+05:00`);
+    const to = new Date(`${dateStr}T23:59:59+05:00`);
+    return { from, to };
+}
 
-    const filter = {
-        status: { $in: SOLD_STATUSES },
-        createdAt: { $gte: from, $lte: to }
-    };
+// status: "all" — все заказы за день (по умолчанию, для вопросов
+// "сколько заказов было"); "sold" — только оплаченные/выданные (для
+// вопросов про выручку/продажи); "rejected" — только отклонённые/отменённые.
+async function getOrdersByDate(date, productName, status) {
+    const { from, to } = getAlmatyDayRange(date);
+
+    const filter = { createdAt: { $gte: from, $lte: to } };
+
+    if (status === "sold") {
+        filter.status = { $in: SOLD_STATUSES };
+    } else if (status === "rejected") {
+        filter.status = { $nin: SOLD_STATUSES };
+    }
+    // status === "all" (или не указан) — без фильтра по статусу вообще
+
     if (productName) {
         filter.product = { $regex: productName, $options: "i" };
     }
 
-    const orders = await Order.find(filter, { product: 1, count: 1, totalPrice: 1, name: 1, createdAt: 1 });
-    return orders.map(o => ({
-        product: o.product,
-        count: o.count,
-        totalPrice: o.totalPrice,
-        client: o.name || "-",
-        time: o.createdAt
-    }));
+    const orders = await Order.find(filter, { product: 1, count: 1, totalPrice: 1, name: 1, status: 1, createdAt: 1 });
+    return {
+        totalOrders: orders.length,
+        orders: orders.map(o => ({
+            product: o.product,
+            count: o.count,
+            totalPrice: o.totalPrice,
+            status: o.status,
+            client: o.name || "-",
+            time: o.createdAt
+        }))
+    };
 }
 
 async function searchProducts(query) {
@@ -110,12 +130,22 @@ const TOOLS = [
         type: "function",
         function: {
             name: "get_orders_by_date",
-            description: "Возвращает проданные (оплаченные/выданные) заказы за конкретную дату, при желании отфильтрованные по товару",
+            description:
+                "Возвращает заказы за конкретную дату. ВАЖНО: если пользователь спрашивает просто " +
+                "\"сколько заказов было\" без уточнения — используй status=\"all\", чтобы посчитать " +
+                "ВСЕ заказы, включая отклонённые и отменённые. Используй status=\"sold\" только если " +
+                "пользователь явно спрашивает про проданные/оплаченные/выданные заказы или выручку. " +
+                "Используй status=\"rejected\" только если явно спрашивает про отклонённые/отменённые.",
             parameters: {
                 type: "object",
                 properties: {
                     date: { type: "string", description: "дата в формате YYYY-MM-DD" },
-                    productName: { type: "string", description: "необязательно — часть названия товара для фильтра" }
+                    productName: { type: "string", description: "необязательно — часть названия товара для фильтра" },
+                    status: {
+                        type: "string",
+                        enum: ["all", "sold", "rejected"],
+                        description: "all = все заказы (по умолчанию), sold = только оплаченные/выданные, rejected = только отклонённые/отменённые"
+                    }
                 },
                 required: ["date"]
             }
@@ -140,21 +170,33 @@ async function executeTool(name, args) {
         case "get_out_of_stock": return getOutOfStock();
         case "get_low_stock": return getLowStock(args.threshold);
         case "get_products_by_price": return getProductsByPrice(args.comparison, args.price);
-        case "get_orders_by_date": return getOrdersByDate(args.date, args.productName);
+        case "get_orders_by_date": return getOrdersByDate(args.date, args.productName, args.status || "all");
         case "search_products": return searchProducts(args.query);
         default: return { error: "Неизвестная функция" };
     }
 }
 
+const MAX_HISTORY_MESSAGES = 12; // 6 обменов туда-обратно — достаточно для контекста, не раздувает токены
+
 // ---------- POST /admin/api/assistant ----------
 router.post('/api/assistant', express.json(), async (req, res) => {
     try {
-        const { message } = req.body || {};
+        const { message, history } = req.body || {};
         if (!message || !message.trim()) {
             return res.status(400).json({ error: "Пустой вопрос" });
         }
 
         const today = new Date().toISOString().slice(0, 10);
+
+        // История — только текстовые user/assistant реплики с фронтенда
+        // (не внутренние tool-вызовы). Фронтенд должен копить её сам и
+        // присылать при каждом запросе, чтобы помощник помнил контекст
+        // в рамках одного открытого чата.
+        const priorMessages = Array.isArray(history)
+            ? history
+                .filter(m => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+                .slice(-MAX_HISTORY_MESSAGES)
+            : [];
 
         const messages = [
             {
@@ -164,8 +206,12 @@ router.post('/api/assistant', express.json(), async (req, res) => {
                     `Отвечай ТОЛЬКО на основе данных, которые получаешь через доступные функции — ` +
                     `никогда не выдумывай товары, цены или заказы. Если для ответа не хватает подходящей ` +
                     `функции — честно скажи, что не можешь ответить на этот вопрос. ` +
-                    `Сегодняшняя дата: ${today}. Отвечай кратко, по-русски, списком если товаров несколько.`
+                    `Сегодняшняя дата: ${today} (часовой пояс Алматы, UTC+5). ` +
+                    `Когда спрашивают "сколько заказов было" без уточнения статуса — считай ВСЕ заказы ` +
+                    `(status="all"), включая отклонённые и отменённые, а не только проданные. ` +
+                    `Отвечай кратко, по-русски, списком если товаров/заказов несколько.`
             },
+            ...priorMessages,
             { role: "user", content: message }
         ];
 

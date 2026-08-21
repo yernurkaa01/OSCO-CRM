@@ -1,6 +1,12 @@
 (function () {
   const API = '/admin/api/assistant';
 
+  // История чата храним в памяти вкладки — пока страница открыта,
+  // помощник помнит контекст разговора. При перезагрузке страницы
+  // начинается новый разговор (это осознанное упрощение, не баг).
+  const conversationHistory = [];
+  const MAX_CLIENT_HISTORY = 20; // держим с запасом, бэкенд всё равно обрежет до нужного
+
   // ---------- Стили ----------
   const style = document.createElement('style');
   style.textContent = `
@@ -8,29 +14,41 @@
       position: fixed;
       bottom: 24px;
       right: 24px;
-      width: 56px;
-      height: 56px;
+      width: 60px;
+      height: 60px;
       border-radius: 50%;
-      background: transparent;
+      background: #fff;
       border: none;
       cursor: pointer;
-      box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+      box-shadow: 0 6px 20px rgba(37,81,217,0.28), 0 2px 6px rgba(0,0,0,0.12);
       z-index: 9998;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 0;
       overflow: hidden;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      animation: aiWidgetPulse 3.5s ease-in-out infinite;
+    }
+    #aiWidgetBtn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 8px 26px rgba(37,81,217,0.38), 0 3px 8px rgba(0,0,0,0.16);
+      animation-play-state: paused;
     }
     #aiWidgetBtn img {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scale(1.6);
+      transform: scale(2.05);
+      pointer-events: none;
+    }
+    @keyframes aiWidgetPulse {
+      0%, 100% { box-shadow: 0 6px 20px rgba(37,81,217,0.28), 0 2px 6px rgba(0,0,0,0.12); }
+      50% { box-shadow: 0 6px 20px rgba(37,81,217,0.5), 0 2px 10px rgba(0,0,0,0.16); }
     }
     #aiWidgetPanel {
       position: fixed;
-      bottom: 90px;
+      bottom: 96px;
       right: 24px;
       width: 340px;
       max-height: 460px;
@@ -164,7 +182,7 @@
       const res = await fetch(API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ message: text, history: conversationHistory })
       });
       const data = await res.json();
 
@@ -174,6 +192,14 @@
         addMessage(data.error || 'Ошибка', 'bot');
       } else {
         addMessage(data.reply, 'bot');
+
+        // Запоминаем обмен репликами для следующего запроса —
+        // именно это даёт помощнику "память" в рамках открытого чата.
+        conversationHistory.push({ role: 'user', content: text });
+        conversationHistory.push({ role: 'assistant', content: data.reply });
+        if (conversationHistory.length > MAX_CLIENT_HISTORY) {
+          conversationHistory.splice(0, conversationHistory.length - MAX_CLIENT_HISTORY);
+        }
       }
     } catch (e) {
       document.getElementById(loadingId).remove();
