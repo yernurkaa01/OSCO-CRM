@@ -218,6 +218,10 @@ async function sendCategoryPage(ctx, categoryName, page, preloadedProducts) {
     // сразу. Обе опции читают склад в реальном времени, не из кэша.
     buttons.push([Markup.button.callback("📄 PDF каталог", `catpdf:${categoryName}`)])
 
+    // Без этой кнопки клиент, зайдя в категорию, не может вернуться к
+    // списку категорий иначе как заново набрав /start — тупиковый диалог.
+    buttons.push([Markup.button.callback("📂 Санаттар тізімі", "showcategories")])
+
     const totalPages = Math.ceil(products.length / CATEGORY_PAGE_SIZE)
     const text =
         `«${categoryName}» санатында ${products.length} тауар бар ` +
@@ -305,6 +309,13 @@ bot.action(/^catpage:(.+):(\d+)$/, async (ctx) => {
 bot.action("allcatalog", async (ctx) => {
     await ctx.answerCbQuery("PDF дайындалуда...")
     return sendFullCatalogPdf(ctx)
+})
+
+// ---- Вернуться к списку категорий (из любого места диалога) ----
+bot.action("showcategories", async (ctx) => {
+    await ctx.answerCbQuery()
+    const keyboard = await buildCategoryMenu()
+    return ctx.reply("📂 Санаттар:", keyboard)
 })
 
 // ---- Скачать PDF конкретной категории (по кнопке в списке) ----
@@ -493,7 +504,10 @@ async function replyWithProduct(ctx, p) {
         `📦 *${p.name}*\n\n` +
         `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸\n` +
         `${status}`,
-        { parse_mode: "Markdown" }
+        {
+            parse_mode: "Markdown",
+            ...Markup.inlineKeyboard([[Markup.button.callback("📂 Санаттар тізімі", "showcategories")]])
+        }
     )
 }
 
