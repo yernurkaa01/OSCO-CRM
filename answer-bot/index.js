@@ -1,12 +1,13 @@
 // ============================================================
 // answer-bot/index.js — БОТ-ОТВЕЧАТЕЛЬ
 // Отвечает на вопросы: работает ли магазин, есть ли товар,
-// сколько стоит. Прямой поиск + AI для нечётких запросов.
-// БЕЗ упоминания оформления заказа — только справочная информация.
+// сколько стоит. Прямой поиск + категории (кнопками) + AI для
+// нечётких запросов. БЕЗ упоминания оформления заказа — только
+// справочная информация.
 // ============================================================
 
 import "dotenv/config"
-import { Telegraf } from "telegraf"
+import { Telegraf, Markup } from "telegraf"
 import mongoose from "mongoose"
 import OpenAI from "openai"
 import Product from "../models/Product.js"
@@ -19,6 +20,8 @@ mongoose.connect(process.env.MONGO_URI)
 
 const bot = new Telegraf(process.env.ANSWER_BOT_TOKEN)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
+const CATEGORY_PAGE_SIZE = 6
 
 // Расписание работы по дням недели (0 = воскресенье, 1 = понедельник, ... 6 = суббота)
 const SCHEDULE = {
@@ -84,6 +87,88 @@ function normalizeKz(str) {
         .replace(/ө/g, "о")
 }
 
+// Расстояние Левенштейна — нужно, чтобы находить категорию даже если
+// клиент написал её с опечаткой ("эмулсия" вместо "эмульсия").
+function levenshtein(a, b) {
+    const m = a.length, n = b.length
+    if (!m) return n
+    if (!n) return m
+    const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+    for (let i = 0; i <= m; i++) dp[i][0] = i
+    for (let j = 0; j <= n; j++) dp[0][j] = j
+    for (let i = 1; i <= m; i++) {
+        for (let j = 1; j <= n; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1
+            dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+        }
+    }
+    return dp[m][n]
+}
+
+// Пытается понять, что клиент на самом деле назвал КАТЕГОРИЮ товара
+// (пусть и с опечаткой), а не конкретный товар. Если так — вместо
+// урезанного списка ("покажем только 3") показываем ВСЕ товары категории
+// кнопками с пагинацией, и клиент просто выбирает нужный тапом.
+async function findMatchingCategory(rawText) {
+    const norm = normalizeKz(rawText.toLowerCase()).trim()
+    if (norm.length < 3) return null
+
+    const categories = await Category.find()
+    let best = null
+    let bestDist = Infinity
+
+    for (const c of categories) {
+        const cNorm = normalizeKz(c.name.toLowerCase()).trim()
+        const dist = levenshtein(norm, cNorm)
+        // Допускаем опечатку примерно в треть длины слова (минимум 1 символ) —
+        // достаточно для "эмулсия"/"эмульсия", но не настолько много, чтобы
+        // случайные слова путались с категориями.
+        const threshold = Math.max(1, Math.floor(cNorm.length * 0.3))
+        if (dist <= threshold && dist < bestDist) {
+            bestDist = dist
+            best = c
+        }
+    }
+    return best
+}
+
+function truncate(str, max) {
+    return str.length > max ? str.slice(0, max - 1) + "…" : str
+}
+
+async function sendCategoryPage(ctx, categoryName, page) {
+    const products = await Product.find({ category: categoryName }).sort({ name: 1 })
+
+    if (!products.length) {
+        const text = `«${categoryName}» санатында тауар жоқ.`
+        return ctx.updateType === "callback_query" ? ctx.editMessageText(text) : ctx.reply(text)
+    }
+
+    const start = page * CATEGORY_PAGE_SIZE
+    const pageItems = products.slice(start, start + CATEGORY_PAGE_SIZE)
+
+    const buttons = pageItems.map(p => [
+        Markup.button.callback(truncate(p.name, 40), `prod:${p.code}`)
+    ])
+
+    const navRow = []
+    if (page > 0) navRow.push(Markup.button.callback("⬅️ Артқа", `catpage:${categoryName}:${page - 1}`))
+    if (start + CATEGORY_PAGE_SIZE < products.length) navRow.push(Markup.button.callback("Келесі ➡️", `catpage:${categoryName}:${page + 1}`))
+    if (navRow.length) buttons.push(navRow)
+
+    const totalPages = Math.ceil(products.length / CATEGORY_PAGE_SIZE)
+    const text =
+        `«${categoryName}» санатында ${products.length} тауар бар ` +
+        `(${page + 1}/${totalPages} бет). Керегін таңдаңыз:`
+
+    const keyboard = Markup.inlineKeyboard(buttons)
+
+    if (ctx.updateType === "callback_query") {
+        return ctx.editMessageText(text, keyboard)
+    }
+    return ctx.reply(text, keyboard)
+}
+
 process.on("unhandledRejection", (err) => {
     console.error("Answer-bot: необработанная ошибка:", err)
 })
@@ -96,6 +181,23 @@ bot.start((ctx) => {
 })
 
 bot.command("id", (ctx) => ctx.reply(`ID: ${ctx.chat.id}`))
+
+// ---- Тап по кнопке конкретного товара (из списка категории) ----
+bot.action(/^prod:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery()
+    const code = ctx.match[1]
+    const p = await Product.findOne({ code })
+    if (!p) return ctx.reply("Кешіріңіз, бұл тауар табылмады.")
+    return replyWithProduct(ctx, p)
+})
+
+// ---- Пагинация внутри категории ----
+bot.action(/^catpage:(.+):(\d+)$/, async (ctx) => {
+    await ctx.answerCbQuery()
+    const categoryName = ctx.match[1]
+    const page = parseInt(ctx.match[2], 10)
+    return sendCategoryPage(ctx, categoryName, page)
+})
 
 bot.on("text", async (ctx) => {
     const rawText = ctx.message.text.trim()
@@ -136,9 +238,16 @@ bot.on("text", async (ctx) => {
         return ctx.reply(status)
     }
 
-    // ---- каталог сұрауы ----
+    // ---- каталог сұрауы (PDF) ----
     if (/(катало)/i.test(normalizedText)) {
         return handleCatalogRequest(ctx, text)
+    }
+
+    // ---- клиент, судя по всему, назвал КАТЕГОРИЮ, а не конкретный товар ----
+    // Показываем ВСЕ товары категории кнопками — не урезаем до 3-5 штук.
+    const matchedCategory = await findMatchingCategory(text)
+    if (matchedCategory) {
+        return sendCategoryPage(ctx, matchedCategory.name, 0)
     }
 
     // ---- тікелей іздеу атауы/коды бойынша ----
@@ -148,7 +257,7 @@ bot.on("text", async (ctx) => {
             { name: { $regex: safeText, $options: "i" } },
             { code: { $regex: safeText, $options: "i" } }
         ]
-    }).limit(5)
+    }).limit(8)
 
     if (direct.length === 1) {
         return replyWithProduct(ctx, direct[0])
@@ -162,7 +271,7 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    // ---- тікелей сәйкестік жоқ — AI арқылы іздейміз ----
+    // ---- тікелей сәйкестік жоқ — AI арқылы іздейміз (нақты, бірақ жазылуы басқаша тауар) ----
     try {
         const allProducts = await Product.find({}, { name: 1, code: 1, category: 1 }).limit(300)
         const catalogList = allProducts.map(p => `${p.code}: ${p.name} [категория: ${p.category}]`).join("\n")
@@ -174,9 +283,8 @@ bot.on("text", async (ctx) => {
                     role: "system",
                     content:
                         `Сен құрылыс материалдары дүкенінің көмекшісісің. Клиент хабарлама жазды — ` +
-                        `тауарлар тізімінен (код: атауы [категория]) мағынасы жағынан ең ұқсас 3-ке дейін тауар тап. ` +
-                        `Клиент категория атауын жазуы мүмкін (мысалы "эмульсия", "цемент") — бұл жағдайда ` +
-                        `сол категориядағы тауарларды ұсын. ` +
+                        `тауарлар тізімінен (код: атауы [категория]) мағынасы жағынан ең ұқсас тауарларды тап ` +
+                        `(мейлінше нақты болса — 1-2 тауар, жалпырақ сұрау болса — 8-ге дейін). ` +
                         `Тек JSON-массив кодтарын қайтар, түсініктемесіз: ["P045","S01"]. ` +
                         `Ешнәрсе сәйкес келмесе — бос массив қайтар: [].\n\n` +
                         `Тауарлар тізімі:\n${catalogList}`
