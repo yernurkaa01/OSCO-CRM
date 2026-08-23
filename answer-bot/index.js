@@ -157,7 +157,8 @@ bot.on("text", async (ctx) => {
     if (direct.length > 1) {
         return ctx.reply(
             "Мына тауарлар табылды:\n\n" +
-            direct.map(formatProductLine).join("\n")
+            direct.map(formatProductLine).join("\n\n"),
+            { parse_mode: "Markdown" }
         )
     }
 
@@ -206,7 +207,8 @@ bot.on("text", async (ctx) => {
 
         return ctx.reply(
             "Сіз мына тауарлардың бірін айтқан болуыңыз мүмкін:\n\n" +
-            matches.map(formatProductLine).join("\n")
+            matches.map(formatProductLine).join("\n\n"),
+            { parse_mode: "Markdown" }
         )
 
     } catch (e) {
@@ -220,19 +222,21 @@ async function replyWithProduct(ctx, p) {
     const status = available > 0 ? `✅ Қоймада бар: ${available} ${p.unit}` : "😔 Қазір қоймада жоқ"
 
     return ctx.reply(
-        `📦 ${p.name}\n` +
-        `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}\n` +
-        `${status}`
+        `📦 *${p.name}*\n\n` +
+        `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸\n` +
+        `${status}`,
+        { parse_mode: "Markdown" }
     )
 }
 
-// Компактная строка на товар — цена и наличие сразу, без отдельного шага
+// Компактная карточка на товар — цена и наличие сразу, без отдельного шага
 // "напишите номер, чтобы узнать подробности". Используется, когда найдено
-// несколько подходящих товаров сразу.
+// несколько подходящих товаров сразу. Единица измерения указана только
+// рядом с остатком (у цены её убрали — там она была лишней).
 function formatProductLine(p) {
     const available = Math.max(0, p.qty - (p.reservedQty || 0))
     const status = available > 0 ? `✅ бар: ${available} ${p.unit}` : "😔 жоқ"
-    return `📦 ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸/${p.unit} (${status})`
+    return `📦 *${p.name}*\n💰 ${p.price.toLocaleString("ru-RU")} ₸ · ${status}`
 }
 
 // Обрабатывает запрос каталога: если в сообщении упомянута конкретная
