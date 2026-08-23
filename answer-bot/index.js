@@ -106,14 +106,36 @@ function levenshtein(a, b) {
 }
 
 // Пытается понять, что клиент на самом деле назвал КАТЕГОРИЮ товара
-// (пусть и с опечаткой), а не конкретный товар. Если так — вместо
-// урезанного списка ("покажем только 3") показываем ВСЕ товары категории
-// кнопками с пагинацией, и клиент просто выбирает нужный тапом.
+// (пусть и с опечаткой, или назвал только часть составного названия —
+// например "эмульсия" вместо полного "ВДК Эмульсия"), а не конкретный
+// товар. Если так — вместо урезанного списка ("покажем только 3")
+// показываем ВСЕ товары категории кнопками с пагинацией.
 async function findMatchingCategory(rawText) {
     const norm = normalizeKz(rawText.toLowerCase()).trim()
     if (norm.length < 3) return null
 
     const categories = await Category.find()
+    if (!categories.length) return null
+
+    // 1) Слово клиента входит в название категории (или наоборот) —
+    // например "эмульсия" находит "ВДК Эмульсия", даже если это не всё
+    // название целиком и не первое слово в нём.
+    const containmentMatches = categories.filter(c => {
+        const cNorm = normalizeKz(c.name.toLowerCase()).trim()
+        return cNorm.includes(norm) || norm.includes(cNorm)
+    })
+    if (containmentMatches.length) {
+        // Если совпало несколько — берём ближайшую по длине названия
+        // (обычно это самая точная/специфичная категория).
+        return containmentMatches.sort((a, b) => {
+            const aDiff = Math.abs(normalizeKz(a.name.toLowerCase()).length - norm.length)
+            const bDiff = Math.abs(normalizeKz(b.name.toLowerCase()).length - norm.length)
+            return aDiff - bDiff
+        })[0]
+    }
+
+    // 2) Полного вхождения нет — ищем через опечатку во всём названии
+    // (расстояние Левенштейна), как раньше.
     let best = null
     let bestDist = Infinity
 
@@ -156,6 +178,11 @@ async function sendCategoryPage(ctx, categoryName, page) {
     if (start + CATEGORY_PAGE_SIZE < products.length) navRow.push(Markup.button.callback("Келесі ➡️", `catpage:${categoryName}:${page + 1}`))
     if (navRow.length) buttons.push(navRow)
 
+    // Кнопкам — для быстрого тапа и мгновенного ответа. PDF — отдельной
+    // кнопкой внизу, для тех, кто хочет посмотреть/сохранить весь список
+    // сразу. Обе опции читают склад в реальном времени, не из кэша.
+    buttons.push([Markup.button.callback("📄 PDF каталог", `catpdf:${categoryName}`)])
+
     const totalPages = Math.ceil(products.length / CATEGORY_PAGE_SIZE)
     const text =
         `«${categoryName}» санатында ${products.length} тауар бар ` +
@@ -197,6 +224,31 @@ bot.action(/^catpage:(.+):(\d+)$/, async (ctx) => {
     const categoryName = ctx.match[1]
     const page = parseInt(ctx.match[2], 10)
     return sendCategoryPage(ctx, categoryName, page)
+})
+
+// ---- Скачать PDF конкретной категории (по кнопке в списке) ----
+bot.action(/^catpdf:(.+)$/, async (ctx) => {
+    await ctx.answerCbQuery("PDF дайындалуда...")
+    const categoryName = ctx.match[1]
+
+    try {
+        // Читаем склад заново, в момент нажатия — данные всегда актуальные,
+        // не заранее сгенерированный/закэшированный файл.
+        const products = await Product.find({ category: categoryName }).sort({ code: 1 })
+
+        if (!products.length) {
+            return ctx.reply(`«${categoryName}» санатында тауар жоқ.`)
+        }
+
+        const pdfBuffer = await generateCatalogPdf(categoryName, products)
+        return ctx.replyWithDocument(
+            { source: pdfBuffer, filename: `catalog_${categoryName}.pdf` },
+            { caption: `📖 «${categoryName}» каталогы` }
+        )
+    } catch (e) {
+        console.error("Answer-bot category PDF error:", e)
+        return ctx.reply("⚠️ PDF жіберу мүмкін болмады, қайталап көріңіз.")
+    }
 })
 
 bot.on("text", async (ctx) => {
