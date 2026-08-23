@@ -88,11 +88,6 @@ process.on("unhandledRejection", (err) => {
     console.error("Answer-bot: необработанная ошибка:", err)
 })
 
-// Короткая память "что показали последним" — чтобы клиент мог ответить
-// просто номером ("3") и получить именно тот товар, а не новый поиск
-// с нуля. Не полноценное состояние диалога — только последний список.
-const lastOptions = {}   // { [chatId]: [productDoc, ...] }
-
 bot.start((ctx) => {
     return ctx.reply(
         "👋 Сәлем! Мен дүкен туралы сұрақтарға жауап беремін — ашық па, тауар бар ма, бағасы қанша.\n\n" +
@@ -106,19 +101,6 @@ bot.on("text", async (ctx) => {
     const rawText = ctx.message.text.trim()
     const text = rawText.toLowerCase()
     const normalizedText = normalizeKz(text)
-    const chatId = ctx.chat.id
-
-    // ---- Клиент отвечает номером на ранее показанный список ----
-    // Понимает и просто "3", и скопированную строку "3. Цемент... — 2 550 ₸"
-    const numberMatch = rawText.match(/^(\d+)/)
-    if (numberMatch && lastOptions[chatId]) {
-        const idx = parseInt(numberMatch[1], 10) - 1
-        const chosen = lastOptions[chatId][idx]
-        if (chosen) {
-            delete lastOptions[chatId]
-            return replyWithProduct(ctx, chosen)
-        }
-    }
 
     // Слишком короткое/бессмысленное сообщение (случайный символ, пробел,
     // знак препинания) — не запускаем поиск вообще, просто просим уточнить.
@@ -173,10 +155,9 @@ bot.on("text", async (ctx) => {
     }
 
     if (direct.length > 1) {
-        lastOptions[chatId] = direct
         return ctx.reply(
-            "Бірнеше нұсқа таптым, нақтылаңыз (нөмірін жазыңыз):\n\n" +
-            direct.map((p, i) => `${i + 1}. ${p.name}`).join("\n")
+            "Мына тауарлар табылды:\n\n" +
+            direct.map(formatProductLine).join("\n")
         )
     }
 
@@ -223,12 +204,9 @@ bot.on("text", async (ctx) => {
             return replyWithProduct(ctx, matches[0])
         }
 
-        lastOptions[chatId] = matches
-
         return ctx.reply(
-            "Сіз мына тауарлардың бірін айтқан болуыңыз мүмкін (нөмірін жазыңыз):\n\n" +
-            matches.map((p, i) => `${i + 1}. ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸`).join("\n") +
-            "\n\nНомерін немесе нақты атауын жазыңыз."
+            "Сіз мына тауарлардың бірін айтқан болуыңыз мүмкін:\n\n" +
+            matches.map(formatProductLine).join("\n")
         )
 
     } catch (e) {
@@ -246,6 +224,15 @@ async function replyWithProduct(ctx, p) {
         `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸/${p.unit}\n` +
         `${status}`
     )
+}
+
+// Компактная строка на товар — цена и наличие сразу, без отдельного шага
+// "напишите номер, чтобы узнать подробности". Используется, когда найдено
+// несколько подходящих товаров сразу.
+function formatProductLine(p) {
+    const available = Math.max(0, p.qty - (p.reservedQty || 0))
+    const status = available > 0 ? `✅ бар: ${available} ${p.unit}` : "😔 жоқ"
+    return `📦 ${p.name} — ${p.price.toLocaleString("ru-RU")} ₸/${p.unit} (${status})`
 }
 
 // Обрабатывает запрос каталога: если в сообщении упомянута конкретная
