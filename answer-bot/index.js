@@ -231,15 +231,55 @@ async function sendCategoryPage(ctx, categoryName, page, preloadedProducts) {
     return ctx.reply(text, keyboard)
 }
 
+// Собирает меню категорий с количеством товаров в каждой — то же самое,
+// что видно в сайдбаре админки ("Все товары 92", "ВДК Эмульсия 47" и т.д.).
+// Показываем его проактивно, а не ждём, пока клиент сам догадается
+// написать точное название категории.
+async function buildCategoryMenu() {
+    const categories = await Category.find().sort({ name: 1 })
+    const counts = await Promise.all(
+        categories.map(c => Product.countDocuments({ category: c.name }))
+    )
+    const totalCount = counts.reduce((a, b) => a + b, 0)
+
+    const rows = categories.map((c, i) => [
+        Markup.button.callback(`📦 ${c.name} (${counts[i]})`, `catpage:${c.name}:0`)
+    ])
+    rows.unshift([Markup.button.callback(`🗂 Барлық тауарлар (${totalCount})`, "allcatalog")])
+
+    return Markup.inlineKeyboard(rows)
+}
+
+async function sendFullCatalogPdf(ctx) {
+    const allProducts = await Product.find({}).sort({ category: 1, code: 1 })
+
+    if (!allProducts.length) {
+        return ctx.reply("Дүкенде тауарлар әлі қосылмаған.")
+    }
+
+    const pdfBuffer = await generateCatalogPdf("Барлық тауарлар", allProducts)
+    return ctx.replyWithDocument(
+        { source: pdfBuffer, filename: "catalog_full.pdf" },
+        { caption: "📖 Толық каталог" }
+    )
+}
+
 process.on("unhandledRejection", (err) => {
     console.error("Answer-bot: необработанная ошибка:", err)
 })
 
-bot.start((ctx) => {
-    return ctx.reply(
-        "👋 Сәлем! Мен дүкен туралы сұрақтарға жауап беремін — ашық па, тауар бар ма, бағасы қанша.\n\n" +
-        "Бірдеңе сұраңыз, мысалы: «цемент бар ма?» немесе «бүгін жұмыс істейсіздер ме?»"
+bot.start(async (ctx) => {
+    await ctx.reply(
+        "👋 Сәлем! Мен дүкеннің көмекші-боты. Не істей аламын:\n\n" +
+        "1️⃣ Тауар іздеу — атауын жазыңыз (мысалы: «цемент»)\n" +
+        "2️⃣ Баға мен қалдықты білу — тауар атауын жазсаңыз жеткілікті\n" +
+        "3️⃣ Жұмыс уақыты — «бүгін ашық па?» деп сұраңыз\n" +
+        "4️⃣ Мекенжай — «мекенжайыңыз қайда?» деп сұраңыз\n" +
+        "5️⃣ Толық каталог — төмендегі санаттардан таңдаңыз немесе «каталог» деп жазыңыз\n\n" +
+        "Санатты таңдаудың орнына жай ғана жазуға да болады."
     )
+    const keyboard = await buildCategoryMenu()
+    return ctx.reply("📂 Санаттар:", keyboard)
 })
 
 bot.command("id", (ctx) => ctx.reply(`ID: ${ctx.chat.id}`))
@@ -259,6 +299,12 @@ bot.action(/^catpage:(.+):(\d+)$/, async (ctx) => {
     const categoryName = ctx.match[1]
     const page = parseInt(ctx.match[2], 10)
     return sendCategoryPage(ctx, categoryName, page)
+})
+
+// ---- Кнопка "Барлық тауарлар" в меню категорий ----
+bot.action("allcatalog", async (ctx) => {
+    await ctx.answerCbQuery("PDF дайындалуда...")
+    return sendFullCatalogPdf(ctx)
 })
 
 // ---- Скачать PDF конкретной категории (по кнопке в списке) ----
@@ -287,10 +333,25 @@ bot.on("text", async (ctx) => {
     const text = rawText.toLowerCase()
     const normalizedText = normalizeKz(text)
 
+    // Клиент прислал голую цифру без остального текста ("2", "3") — скорее
+    // всего, ожидает пронумерованное меню, которого у бота нет. Вместо
+    // непонятного отказа показываем список возможностей — видимо, это и
+    // есть то самое "меню", которое он искал.
+    if (/^\d+$/.test(rawText)) {
+        return ctx.reply(
+            "Нөмірлі мәзір жоқ — не істей алатынымды тізіп берейін:\n\n" +
+            "1️⃣ Тауар іздеу — атауын жазыңыз (мысалы: «цемент»)\n" +
+            "2️⃣ Баға мен қалдықты білу — тауар атауын жазсаңыз жеткілікті\n" +
+            "3️⃣ Жұмыс уақыты — «бүгін ашық па?» деп сұраңыз\n" +
+            "4️⃣ Мекенжай — «мекенжайыңыз қайда?» деп сұраңыз\n" +
+            "5️⃣ Толық каталог — «каталог» деп жазыңыз"
+        )
+    }
+
     // Слишком короткое/бессмысленное сообщение (случайный символ, пробел,
     // знак препинания) — не запускаем поиск вообще, просто просим уточнить.
     if (text.replace(/[^a-zа-яёқғңұүәіө0-9]/gi, "").length < 2) {
-        return ctx.reply("Не совсем понял вопрос — напишите название товара или спросите про часы работы.")
+        return ctx.reply("Сұрағыңызды толық түсінбедім — тауар атауын жазыңыз немесе жұмыс уақыты туралы сұраңыз.")
     }
 
     // ---- сәлемдесу / қоштасу / рахмет ----
@@ -398,8 +459,10 @@ bot.on("text", async (ctx) => {
         }
 
         if (!codes.length) {
+            const keyboard = await buildCategoryMenu()
             return ctx.reply(
-                "😔 Кешіріңіз, дүкенімізде мұндай тауар жоқ."
+                "😔 Кешіріңіз, дүкенімізде мұндай тауар табылмады. Санаттардан қарап көріңіз:",
+                keyboard
             )
         }
 
@@ -471,17 +534,7 @@ async function handleCatalogRequest(ctx, text) {
         }
 
         // Категория нақтыланбаған — толық каталогты жібереміз
-        const allProducts = await Product.find({}).sort({ category: 1, code: 1 })
-
-        if (!allProducts.length) {
-            return ctx.reply("Дүкенде тауарлар әлі қосылмаған.")
-        }
-
-        const pdfBuffer = await generateCatalogPdf("Барлық тауарлар", allProducts)
-        return ctx.replyWithDocument(
-            { source: pdfBuffer, filename: "catalog_full.pdf" },
-            { caption: "📖 Толық каталог" }
-        )
+        return sendFullCatalogPdf(ctx)
 
     } catch (e) {
         console.error("Answer-bot catalog error:", e)
