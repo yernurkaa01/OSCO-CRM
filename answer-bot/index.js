@@ -22,6 +22,10 @@ const bot = new Telegraf(process.env.ANSWER_BOT_TOKEN)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
 const CATEGORY_PAGE_SIZE = 6
+// Если товаров в категории больше этого числа — сразу присылаем PDF со
+// всем списком вместе с кнопками, а не заставляем клиента листать много
+// страниц кнопками ради общего обзора ассортимента.
+const LARGE_CATEGORY_THRESHOLD = 18
 
 // Расписание работы по дням недели (0 = воскресенье, 1 = понедельник, ... 6 = суббота)
 const SCHEDULE = {
@@ -105,6 +109,26 @@ function levenshtein(a, b) {
     return dp[m][n]
 }
 
+// Проверяет только НАЧАЛО слова — если несколько первых букв запроса
+// однозначно (без других похожих категорий) указывают на одно название,
+// не важно, что там дальше (пропущенная буква, окончание другое и т.д.).
+// Решает случаи вроде "эмулсия" (без "ь") — это не сплошная подстрока
+// "эмульсия" (буква "ь" разрывает совпадение), но начало слова то же самое.
+function findByPrefix(norm, categories) {
+    const prefixLen = Math.min(4, norm.length)
+    const prefix = norm.slice(0, prefixLen)
+
+    const matches = categories.filter(c => {
+        const words = normalizeKz(c.name.toLowerCase()).trim().split(/\s+/)
+        return words.some(w => w.startsWith(prefix))
+    })
+
+    // Совпадение засчитываем, только если оно ОДНОЗНАЧНОЕ — если по такому
+    // началу подходит несколько разных категорий, лучше промолчать и уйти
+    // в более точную проверку ниже, чем угадать неправильно.
+    return matches.length === 1 ? matches[0] : null
+}
+
 // Пытается понять, что клиент на самом деле назвал КАТЕГОРИЮ товара
 // (пусть и с опечаткой, или назвал только часть составного названия —
 // например "эмульсия" вместо полного "ВДК Эмульсия"), а не конкретный
@@ -134,17 +158,20 @@ async function findMatchingCategory(rawText) {
         })[0]
     }
 
-    // 2) Полного вхождения нет — ищем через опечатку во всём названии
-    // (расстояние Левенштейна), как раньше.
+    // 2) Полного вхождения нет (например, опечатка ломает подстроку
+    // посередине слова) — проверяем однозначное совпадение по началу слова.
+    const prefixMatch = findByPrefix(norm, categories)
+    if (prefixMatch) return prefixMatch
+
+    // 3) И то не сработало — общая проверка на опечатку по всему слову
+    // (расстояние Левенштейна).
     let best = null
     let bestDist = Infinity
 
     for (const c of categories) {
         const cNorm = normalizeKz(c.name.toLowerCase()).trim()
         const dist = levenshtein(norm, cNorm)
-        // Допускаем опечатку примерно в треть длины слова (минимум 1 символ) —
-        // достаточно для "эмулсия"/"эмульсия", но не настолько много, чтобы
-        // случайные слова путались с категориями.
+        // Допускаем опечатку примерно в треть длины слова (минимум 1 символ).
         const threshold = Math.max(1, Math.floor(cNorm.length * 0.3))
         if (dist <= threshold && dist < bestDist) {
             bestDist = dist
@@ -158,8 +185,16 @@ function truncate(str, max) {
     return str.length > max ? str.slice(0, max - 1) + "…" : str
 }
 
-async function sendCategoryPage(ctx, categoryName, page) {
-    const products = await Product.find({ category: categoryName }).sort({ name: 1 })
+async function sendCategoryPdfFromList(ctx, categoryName, products) {
+    const pdfBuffer = await generateCatalogPdf(categoryName, products)
+    return ctx.replyWithDocument(
+        { source: pdfBuffer, filename: `catalog_${categoryName}.pdf` },
+        { caption: `📖 «${categoryName}» толық каталогы (${products.length} тауар)` }
+    )
+}
+
+async function sendCategoryPage(ctx, categoryName, page, preloadedProducts) {
+    const products = preloadedProducts || await Product.find({ category: categoryName }).sort({ name: 1 })
 
     if (!products.length) {
         const text = `«${categoryName}» санатында тауар жоқ.`
@@ -240,11 +275,7 @@ bot.action(/^catpdf:(.+)$/, async (ctx) => {
             return ctx.reply(`«${categoryName}» санатында тауар жоқ.`)
         }
 
-        const pdfBuffer = await generateCatalogPdf(categoryName, products)
-        return ctx.replyWithDocument(
-            { source: pdfBuffer, filename: `catalog_${categoryName}.pdf` },
-            { caption: `📖 «${categoryName}» каталогы` }
-        )
+        return sendCategoryPdfFromList(ctx, categoryName, products)
     } catch (e) {
         console.error("Answer-bot category PDF error:", e)
         return ctx.reply("⚠️ PDF жіберу мүмкін болмады, қайталап көріңіз.")
@@ -299,7 +330,21 @@ bot.on("text", async (ctx) => {
     // Показываем ВСЕ товары категории кнопками — не урезаем до 3-5 штук.
     const matchedCategory = await findMatchingCategory(text)
     if (matchedCategory) {
-        return sendCategoryPage(ctx, matchedCategory.name, 0)
+        const products = await Product.find({ category: matchedCategory.name }).sort({ name: 1 })
+
+        if (!products.length) {
+            return ctx.reply(`«${matchedCategory.name}» санатында тауар жоқ.`)
+        }
+
+        // Большая категория — сразу присылаем PDF со всем списком, чтобы не
+        // заставлять клиента листать много страниц кнопками ради общего
+        // обзора. Кнопки всё равно показываем следом — для быстрого тапа
+        // по конкретной позиции.
+        if (products.length > LARGE_CATEGORY_THRESHOLD) {
+            await sendCategoryPdfFromList(ctx, matchedCategory.name, products)
+        }
+
+        return sendCategoryPage(ctx, matchedCategory.name, 0, products)
     }
 
     // ---- тікелей іздеу атауы/коды бойынша ----
