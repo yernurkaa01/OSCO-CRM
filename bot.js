@@ -31,6 +31,75 @@ const CHECKS_CHAT_ID = "-5164072787"
 // он подтвердил заказ (и товар был реально зарезервирован).
 const RESERVATION_TIMEOUT_MS = 10 * 60 * 1000 // 10 минут
 
+// ============================================================
+// Товары, которые продаются ВЕСОМ/ОБЪЁМОМ, а не поштучно — для них
+// разрешаем дробное количество и понимаем "100г", "0.5кг", "полкило".
+// Единица хранится в базе как есть (например "кг") — мы НЕ переводим
+// склад в граммы, только конвертируем ВВОД клиента в ту же единицу,
+// в которой товар и так хранится. Иначе "Общий остаток" на складе
+// превратится в бессмысленную кашу из смешанных единиц (кг + граммы
+// + штуки в одной сумме).
+// ============================================================
+const FRACTIONAL_UNITS = ["кг", "kg", "л", "литр", "литра", "литров", "м", "м2", "м²", "м3", "м³"]
+const WEIGHT_UNITS = ["кг", "kg"]
+
+function isFractionalUnit(unit) {
+    return FRACTIONAL_UNITS.includes(String(unit || "").trim().toLowerCase())
+}
+
+function isWeightUnit(unit) {
+    return WEIGHT_UNITS.includes(String(unit || "").trim().toLowerCase())
+}
+
+// Округляем до 2 знаков после запятой, чтобы избежать "мусора" от
+// плавающей точки (0.1 + 0.2 и т.п.), сохраняя точность до сотых.
+function roundQty(n) {
+    return Math.round(n * 100) / 100
+}
+
+// Разбирает ввод количества клиента с учётом единицы измерения товара.
+// Возвращает число (в той же единице, что и unit) или null, если не удалось
+// распознать / формат не подходит для этого товара (например, дробное
+// количество для штучного товара).
+function parseQuantity(rawText, unit) {
+    const text = rawText.trim().toLowerCase().replace(",", ".")
+    const fractional = isFractionalUnit(unit)
+    const weight = isWeightUnit(unit)
+
+    // "пол кило" / "полкило" / "пол кг" — 0.5 (только для весовых товаров)
+    if (weight && /^(пол\s?кило|полкило|пол\s?кг|половина\s?кг|половина\s?кило)$/.test(text)) {
+        return 0.5
+    }
+    // "четверть кило" / "четверть кг" — 0.25
+    if (weight && /^(четверть\s?кило|четверть\s?кг)$/.test(text)) {
+        return 0.25
+    }
+
+    // число + "г"/"гр"/"грамм..." — переводим граммы в кг (только для весовых товаров)
+    const gramsMatch = text.match(/^(\d+(?:\.\d+)?)\s*(г|гр|грамм|грамма|граммов)\.?$/)
+    if (gramsMatch) {
+        if (!weight) return null // граммы бессмысленны для товара не в кг
+        return roundQty(Number(gramsMatch[1]) / 1000)
+    }
+
+    // число + "кг"/"килограмм..." — суффикс избыточен, просто берём число
+    const kgMatch = text.match(/^(\d+(?:\.\d+)?)\s*(кг|килограмм|килограмма|килограммов)\.?$/)
+    if (kgMatch) {
+        return roundQty(Number(kgMatch[1]))
+    }
+
+    // просто число (точка или запятая как разделитель)
+    if (/^\d+(?:\.\d+)?$/.test(text)) {
+        const value = roundQty(Number(text))
+        // Дробное число для штучного товара (шт, мешок и т.д.) не разрешаем —
+        // там дробей физически не бывает.
+        if (!Number.isInteger(value) && !fractional) return null
+        return value
+    }
+
+    return null
+}
+
 function isChecksChat(ctx) {
     return String(ctx.chat.id) === CHECKS_CHAT_ID
 }
@@ -144,7 +213,10 @@ function formatCartSummary(user) {
     let total = 0
 
     user.cart.forEach((item, i) => {
-        const sum = item.count * item.price
+        // Math.round — сумма в тенге всегда целая, но при умножении дробного
+        // веса на цену (например 0.5 * 400) плавающая точка иногда даёт
+        // "199.99999999999997" вместо 200 — округляем, чтобы это не вылезало.
+        const sum = Math.round(item.count * item.price)
         total += sum
         text += `${i + 1}. ${item.product} — ${item.count} ${item.unit} = ${sum.toLocaleString("ru-RU")} ₸\n`
     })
@@ -331,11 +403,11 @@ bot.on("document", async (ctx) => {
 
         const itemsList = user.cart
             .map(item =>
-                `🛒 ${item.product}\n🔢 ${item.count} ${item.unit} — ${(item.count * item.price).toLocaleString("ru-RU")} тг`
+                `🛒 ${item.product}\n🔢 ${item.count} ${item.unit} — ${Math.round(item.count * item.price).toLocaleString("ru-RU")} тг`
             )
             .join("\n\n")
 
-        const grandTotal = user.cart.reduce((acc, item) => acc + item.count * item.price, 0)
+        const grandTotal = Math.round(user.cart.reduce((acc, item) => acc + item.count * item.price, 0))
 
         await ctx.telegram.sendDocument(
             CHECKS_CHAT_ID,
@@ -507,7 +579,11 @@ bot.on("text", async (ctx) => {
         user.unit = product.unit
         user.step = "count"
 
-        return ctx.reply(`Сколько нужно "${product.name}"?`, Markup.removeKeyboard())
+        const hint = isFractionalUnit(product.unit)
+            ? ` (например: 2.5 или 500г)`
+            : ""
+
+        return ctx.reply(`Сколько нужно "${product.name}"?${hint}`, Markup.removeKeyboard())
     }
 
     // ---- выбор товара по коду ----
@@ -535,15 +611,22 @@ bot.on("text", async (ctx) => {
         user.unit = product.unit
         user.step = "count"
 
-        return ctx.reply(`Сколько нужно "${product.name}"?`)
+        const hint = isFractionalUnit(product.unit)
+            ? ` (например: 2.5 или 500г)`
+            : ""
+
+        return ctx.reply(`Сколько нужно "${product.name}"?${hint}`)
     }
 
     // ---- количество (информационная проверка, БЕЗ резервирования) ----
     if (user.step === "count") {
-        const count = Number(text)
+        const count = parseQuantity(text, user.unit)
 
-        if (isNaN(count) || count <= 0 || !Number.isInteger(count)) {
-            return ctx.reply("Введите корректное количество (целое число):")
+        if (count === null || count <= 0) {
+            const errorHint = isFractionalUnit(user.unit)
+                ? `Введите корректное количество, например: 2.5 или 500г`
+                : `Введите корректное количество (целое число):`
+            return ctx.reply(errorHint)
         }
 
         try {
@@ -652,7 +735,7 @@ bot.on("text", async (ctx) => {
                     productCode: item.code,
                     count: item.count,
                     telegramId: id,
-                    totalPrice: item.count * item.price,
+                    totalPrice: Math.round(item.count * item.price),
                     status: "резерв"
                 })
             }
@@ -715,7 +798,7 @@ bot.on("text", async (ctx) => {
         const cartList = user.cart
             .map(item => `${item.product} — ${item.count} ${item.unit}`)
             .join("\n")
-        const grandTotal = user.cart.reduce((acc, item) => acc + item.count * item.price, 0)
+        const grandTotal = Math.round(user.cart.reduce((acc, item) => acc + item.count * item.price, 0))
 
         try {
             await ctx.telegram.sendMessage(
