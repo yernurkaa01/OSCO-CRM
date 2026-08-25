@@ -6,6 +6,14 @@ const router = express.Router();
 
 const LOW_STOCK_THRESHOLD = 50;
 
+// Единицы измерения, которые продаются ВЕСОМ/ОБЪЁМОМ, а не поштучно.
+// Их нельзя складывать вместе со штучными товарами (шт, мешок, рулон) —
+// сумма получается бессмысленной кашей из разных величин. Список совпадает
+// с тем, что используется в order-bot (там же решается, разрешать ли
+// дробный ввод количества) — если добавляете новую весовую единицу,
+// поправьте оба места.
+const FRACTIONAL_UNITS = ["кг", "kg", "л", "литр", "литра", "литров", "м", "м2", "м²", "м3", "м³"];
+
 function statusOf(qty) {
   if (qty <= 0) return { code: 'out', label: 'Нет в наличии' };
   if (qty <= LOW_STOCK_THRESHOLD) return { code: 'low', label: `Мало (≤ ${LOW_STOCK_THRESHOLD})` };
@@ -103,10 +111,28 @@ router.delete('/api/warehouse/categories/:key', async (req, res) => {
 router.get('/api/warehouse/stats', async (req, res) => {
   try {
     const totalItems = await Product.countDocuments();
+
+    // "Общий остаток" считаем ТОЛЬКО по штучным/счётным товарам (шт, мешок,
+    // рулон и т.д.) — весовые/объёмные единицы туда не попадают, иначе
+    // сумма превращается в бессмысленную смесь килограммов и штук.
     const unitsAgg = await Product.aggregate([
+      { $addFields: { unitLower: { $toLower: "$unit" } } },
+      { $match: { unitLower: { $nin: FRACTIONAL_UNITS } } },
       { $group: { _id: null, totalUnits: { $sum: "$qty" } } },
     ]);
     const totalUnits = unitsAgg[0]?.totalUnits || 0;
+
+    // Отдельная разбивка по весовым/объёмным единицам — чтобы эти данные
+    // не терялись, а показывались рядом (например "+ 22.5 кг"), а не
+    // складывались в общую сумму.
+    const weightAgg = await Product.aggregate([
+      { $addFields: { unitLower: { $toLower: "$unit" } } },
+      { $match: { unitLower: { $in: FRACTIONAL_UNITS } } },
+      { $group: { _id: "$unit", total: { $sum: "$qty" } } },
+      { $sort: { _id: 1 } },
+    ]);
+    const weightBreakdown = weightAgg.map(w => ({ unit: w._id, total: w.total }));
+
     const lowStock = await Product.countDocuments({
       qty: { $gt: 0, $lte: LOW_STOCK_THRESHOLD },
     });
@@ -115,6 +141,7 @@ router.get('/api/warehouse/stats', async (req, res) => {
     res.json({
       totalItems,
       totalUnits,
+      weightBreakdown,
       lowStock,
       outOfStock,
       updatedAt: new Date().toISOString(),
