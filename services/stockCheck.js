@@ -11,11 +11,7 @@ export const STOCK_STATUS = {
 /**
  * Информационная проверка наличия — НЕ резервирует товар, просто
  * показывает клиенту, сколько реально доступно (qty - reservedQty)
- * на данный момент. Используется при вводе количества, до подтверждения
- * всей корзины.
- * @param {string} productName
- * @param {number} requestedQty
- * @returns {Promise<{status: string, availableQty?: number}>}
+ * на данный момент.
  */
 export async function checkProductStock(productName, requestedQty) {
     try {
@@ -45,18 +41,9 @@ export async function checkProductStock(productName, requestedQty) {
 }
 
 /**
- * Атомарно резервирует товар — увеличивает reservedQty, но ТОЛЬКО если
- * на этот момент реально доступно (qty - reservedQty) >= requestedQty.
- * Проверка условия и захват резерва происходят одной неделимой операцией
- * на уровне MongoDB — это и есть защита от гонки состояний (race condition),
- * когда два клиента одновременно пытаются купить последний остаток.
- *
- * Вызывать в момент финального подтверждения заказа клиентом
- * ("Подтвердить заказ? -> Да"), а не раньше.
- *
- * @param {string} productName
- * @param {number} qty
- * @returns {Promise<boolean>} true — резерв захвачен, false — не хватило
+ * Атомарно резервирует товар — увеличивает reservedQty, только если
+ * реально доступно (qty - reservedQty) >= requestedQty.
+ * Используется в Telegram-боте: резерв на время оформления заказа.
  */
 export async function reserveStock(productName, qty) {
     try {
@@ -66,7 +53,7 @@ export async function reserveStock(productName, qty) {
                 $expr: { $gte: [{ $subtract: ["$qty", "$reservedQty"] }, qty] }
             },
             { $inc: { reservedQty: qty } },
-            { new: true }
+            { returnDocument: "after" }
         )
 
         return !!result
@@ -78,11 +65,7 @@ export async function reserveStock(productName, qty) {
 }
 
 /**
- * Освобождает ранее зарезервированное количество — вызывать при отмене
- * заказа клиентом, отклонении менеджером, или истечении таймаута ожидания
- * оплаты. Не даёт reservedQty уйти в минус (на случай двойного вызова).
- * @param {string} productName
- * @param {number} qty
+ * Освобождает ранее зарезервированное количество (отмена/таймаут/отклонение).
  */
 export async function releaseStock(productName, qty) {
     try {
@@ -91,8 +74,6 @@ export async function releaseStock(productName, qty) {
             { $inc: { reservedQty: -qty } }
         )
 
-        // Подстраховка: если из-за гонки/повторного вызова reservedQty
-        // ушёл в минус — поджимаем обратно к нулю.
         await Product.updateOne(
             { name: productName, reservedQty: { $lt: 0 } },
             { $set: { reservedQty: 0 } }
@@ -107,11 +88,8 @@ export async function releaseStock(productName, qty) {
 }
 
 /**
- * Превращает резерв в постоянное списание — вызывать ТОЛЬКО когда
- * менеджер подтвердил оплату заказа в CRM. Уменьшает qty и reservedQty
- * одновременно одной атомарной операцией.
- * @param {string} productName
- * @param {number} qty
+ * Превращает резерв в постоянное списание — вызывать когда менеджер
+ * подтвердил оплату заказа из Telegram-бота.
  */
 export async function finalizeStock(productName, qty) {
     try {
@@ -120,7 +98,6 @@ export async function finalizeStock(productName, qty) {
             { $inc: { qty: -qty, reservedQty: -qty } }
         )
 
-        // Подстраховка от ухода в минус
         await Product.updateOne(
             { name: productName, reservedQty: { $lt: 0 } },
             { $set: { reservedQty: 0 } }
@@ -135,11 +112,7 @@ export async function finalizeStock(productName, qty) {
 }
 
 /**
- * Возвращает физический товар на склад — вызывать при возврате денег
- * клиенту после того, как заказ уже был подтверждён и списан.
- * reservedQty НЕ трогаем — резерв уже был снят в момент finalizeStock.
- * @param {string} productName
- * @param {number} qty
+ * Возвращает физический товар на склад — при возврате денег.
  */
 export async function restockStock(productName, qty) {
     try {
@@ -151,6 +124,32 @@ export async function restockStock(productName, qty) {
 
     } catch (error) {
         console.error("Ошибка при возврате остатков:", error)
+        return false
+    }
+}
+
+/**
+ * МГНОВЕННАЯ продажа (для интерфейса сотрудников /sell) — без фазы
+ * резервирования и ожидания оплаты. Атомарно проверяет доступность
+ * (qty - reservedQty >= requestedQty) и СРАЗУ списывает физический
+ * остаток одной неделимой операцией.
+ * @returns {Promise<boolean>} true — продано, false — не хватило остатка
+ */
+export async function sellStock(productCode, qty) {
+    try {
+        const result = await Product.findOneAndUpdate(
+            {
+                code: productCode,
+                $expr: { $gte: [{ $subtract: ["$qty", "$reservedQty"] }, qty] }
+            },
+            { $inc: { qty: -qty } },
+            { returnDocument: "after" }
+        )
+
+        return !!result
+
+    } catch (error) {
+        console.error("Ошибка при мгновенной продаже:", error)
         return false
     }
 }
