@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>OSCO — Проверка заказа по коду</title>
+<link rel="stylesheet" href="/style.css" />
+<link rel="stylesheet" href="/warehouse.css" />
+</head>
+<body>
+<div class="nav">
+<a class="nav-link" href="/admin">📦 Заказы</a>
+<a class="nav-link" href="/admin/clients">👥 Клиенты</a>
+<a class="nav-link" href="/admin/history">📜 История действий</a>
+<a class="nav-link" href="/admin/warehouse">📦 Склад</a>
+<a class="nav-link" href="/admin/reports">📊 Отчёты</a>
+<a class="nav-link" href="/admin/employees">👷 Сотрудники</a>
+<a class="nav-link" href="/admin/stock-movements">🔄 Движение товара</a>
+<a class="nav-link active" href="/admin/order-lookup">🔎 Проверка заказа</a>
+<a class="nav-link logout-link" href="/logout">Выйти</a>
+</div>
+
+<div class="warehouse-container">
+<main class="warehouse-content" style="width:100%; max-width:600px;">
+<h1>🔎 Проверка заказа по коду</h1>
+<p style="color:#8a8f98;margin-top:-10px;">Работает и для заказов из бота, и для продаж сотрудников через /sell</p>
+
+<div class="table-card" style="padding:18px 22px;">
+<div style="display:flex; gap:10px;">
+<input type="text" id="codeInput" class="warehouse-search" placeholder="Введите код заказа, например 7133" style="flex:1;">
+<button class="btn btn-primary" id="lookupBtn">Найти</button>
+</div>
+<div id="lookupResult" style="margin-top:16px;"></div>
+</div>
+
+</main>
+</div>
+
+<script src="/order-lookup.js"></script>
+</body>
+</html>
