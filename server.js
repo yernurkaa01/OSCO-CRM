@@ -11,11 +11,13 @@ import path from "path"
 import session from "express-session"
 import OpenAI from "openai"
 import fetch from "node-fetch"
+import bcrypt from "bcryptjs"
 import { fileURLToPath } from "url"
 
 import Order from "./models/Order.js"
 import Client from "./models/Client.js"
 import Log from "./models/Log.js"
+import User from "./models/User.js"
 import clientsRouter from "./routes/clients.js"
 
 import warehouseApiRouter from "./routes/warehouse.js"
@@ -23,6 +25,10 @@ import reportsApiRouter from "./routes/reports.js"
 import employeesApiRouter from "./routes/employees.js"
 import stockMovementsApiRouter from "./routes/stockMovements.js"
 import assistantApiRouter from "./routes/assistant.js"
+import bonusesApiRouter from "./routes/bonuses.js"
+import orderLookupApiRouter from "./routes/orderLookup.js"
+import sellerSalesApiRouter from "./routes/sellerSales.js"
+import employeeSalesRouter from "./routes/employeeSales.js"
 import { finalizeStock, releaseStock, restockStock } from "./services/stockCheck.js"
 
 
@@ -67,22 +73,9 @@ maxAge: 1000 * 60 * 60 * 24
 
 
 // ============================================================
-// USERS
+// USERS — теперь хранятся в базе (модель User), не здесь.
+// Первоначальные учётки создаются один раз скриптом scripts/seedUsers.js
 // ============================================================
-
-const USERS = [
-    {
-username: process.env.ADMIN_USER,   // Нуртуган 
-password: process.env.ADMIN_PASS,
-role: "owner"
-    },
-
-    {
-username: process.env.CASHIER_USER,  // Женисбек
-password: process.env.CASHIER_PASS,
-role: "cashier"
-    }
-]
 
 
 // ============================================================
@@ -222,20 +215,23 @@ res.send(`
 // LOGIN POST
 // ============================================================
 
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
 
 const { username, password } = req.body
 
-const user = USERS.find(u =>
-u.username === username &&
-u.password === password
-    )
+const user = await User.findOne({ username })
 
 if (!user) {
 return res.send("❌ Неверный логин или пароль")
     }
 
-req.session.user = user
+const passwordMatches = await bcrypt.compare(password, user.passwordHash)
+
+if (!passwordMatches) {
+return res.send("❌ Неверный логин или пароль")
+    }
+
+req.session.user = { username: user.username, role: user.role }
 
 res.redirect("/admin")
 
@@ -251,6 +247,139 @@ app.get("/logout", (req, res) => {
 req.session.destroy(() => {
 res.redirect("/login")
     })
+
+})
+
+
+// ============================================================
+// CHANGE PASSWORD PAGE
+// ============================================================
+
+app.get("/change-password", checkAuth, (req, res) => {
+
+res.send(`
+        <html>
+
+        <body style="
+            font-family: Arial;
+            display:flex;
+            justify-content:center;
+            align-items:center;
+            height:100vh;
+            background:#f5f5f5;
+        ">
+
+            <form
+                method="POST"
+                action="/change-password"
+
+                style="
+                    background:white;
+                    padding:30px;
+                    border-radius:10px;
+                    width:300px;
+                    box-shadow:0 0 10px rgba(0,0,0,0.1);
+                "
+            >
+
+                <h2>Смена пароля</h2>
+                <p style="color:#888; font-size:13px; margin-top:-10px;">Вы вошли как: ${req.session.user.username}</p>
+
+                <input
+                    type="password"
+                    name="oldPassword"
+                    placeholder="Текущий пароль"
+
+                    style="
+                        width:100%;
+                        padding:10px;
+                        margin-bottom:10px;
+                        box-sizing:border-box;
+                    "
+                />
+
+                <input
+                    type="password"
+                    name="newPassword"
+                    placeholder="Новый пароль"
+
+                    style="
+                        width:100%;
+                        padding:10px;
+                        margin-bottom:10px;
+                        box-sizing:border-box;
+                    "
+                />
+
+                <button
+                    style="
+                        width:100%;
+                        padding:10px;
+                        background:black;
+                        color:white;
+                        border:none;
+                        cursor:pointer;
+                    "
+                >
+                    Сохранить
+                </button>
+
+                <p style="text-align:center; margin-top:14px;">
+                    <a href="/admin" style="color:#666; font-size:13px;">← Назад в админку</a>
+                </p>
+
+            </form>
+
+        </body>
+        </html>
+    `)
+
+})
+
+
+// ============================================================
+// CHANGE PASSWORD POST
+// ============================================================
+
+app.post("/change-password", checkAuth, async (req, res) => {
+
+try {
+
+const { oldPassword, newPassword } = req.body
+
+if (!newPassword || newPassword.trim().length < 4) {
+return res.send("❌ Новый пароль слишком короткий (минимум 4 символа). <a href='/change-password'>Назад</a>")
+        }
+
+const user = await User.findOne({ username: req.session.user.username })
+
+if (!user) {
+return res.send("❌ Пользователь не найден")
+        }
+
+const oldPasswordMatches = await bcrypt.compare(oldPassword, user.passwordHash)
+
+if (!oldPasswordMatches) {
+return res.send("❌ Текущий пароль указан неверно. <a href='/change-password'>Назад</a>")
+        }
+
+user.passwordHash = await bcrypt.hash(newPassword, 10)
+await user.save()
+
+await Log.create({
+user: req.session.user.username,
+action: "Сменил пароль",
+orderId: "-"
+        })
+
+res.send("✅ Пароль изменён. <a href='/admin'>В админку</a>")
+
+    } catch (err) {
+
+console.error("CHANGE PASSWORD error:", err)
+res.status(500).send("Ошибка смены пароля")
+
+    }
 
 })
 
@@ -803,6 +932,59 @@ path.join(__dirname, "views", "stock-movements.html")
 
 
 // ============================================================
+// BONUSES PAGE
+// ============================================================
+
+app.get("/admin/bonuses", checkAuth, ownerOnly, (req, res) => {
+
+res.sendFile(
+path.join(__dirname, "views", "bonuses.html")
+    )
+
+})
+
+
+// ============================================================
+// ORDER LOOKUP PAGE
+// ============================================================
+
+app.get("/admin/order-lookup", checkAuth, ownerOnly, (req, res) => {
+
+res.sendFile(
+path.join(__dirname, "views", "order-lookup.html")
+    )
+
+})
+
+
+// ============================================================
+// SELLER SALES PAGE
+// ============================================================
+
+app.get("/admin/seller-sales", checkAuth, ownerOnly, (req, res) => {
+
+res.sendFile(
+path.join(__dirname, "views", "seller-sales.html")
+    )
+
+})
+
+
+// ============================================================
+// SELL PAGE (интерфейс продавцов — отдельный логин, БЕЗ checkAuth,
+// у сотрудников своя отдельная сессия req.session.employee)
+// ============================================================
+
+app.get("/sell", (req, res) => {
+
+res.sendFile(
+path.join(__dirname, "views", "sell.html")
+    )
+
+})
+
+
+// ============================================================
 // WAREHOUSE API
 // ============================================================
 
@@ -835,6 +1017,34 @@ app.use("/admin", checkAuth, ownerOnly, stockMovementsApiRouter)
 // ============================================================
 
 app.use("/admin", checkAuth, ownerOnly, assistantApiRouter)
+
+
+// ============================================================
+// BONUSES API
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, bonusesApiRouter)
+
+
+// ============================================================
+// ORDER LOOKUP API
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, orderLookupApiRouter)
+
+
+// ============================================================
+// SELLER SALES API
+// ============================================================
+
+app.use("/admin", checkAuth, ownerOnly, sellerSalesApiRouter)
+
+
+// ============================================================
+// EMPLOYEE SALES API (публичный — свой логин сотрудника, не админский)
+// ============================================================
+
+app.use("/", employeeSalesRouter)
 
 
 // ============================================================
