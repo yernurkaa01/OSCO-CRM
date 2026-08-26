@@ -16,9 +16,6 @@ function escapeRegex(str) {
 }
 
 // ---------- POST /admin/api/incidents/parse ----------
-// Разбирает свободную фразу ("Сергей эмульсия Rocks 7 кг разбил") на
-// сотрудника/товар/количество/причину через AI, и подбирает совпадения
-// в базе. НИЧЕГО не сохраняет — только предлагает варианты для подтверждения.
 router.post('/api/incidents/parse', express.json(), async (req, res) => {
     try {
         const { text } = req.body || {};
@@ -53,9 +50,6 @@ router.post('/api/incidents/parse', express.json(), async (req, res) => {
             name: { $regex: escapeRegex(parsed.employeeName || ""), $options: "i" }
         }).limit(5);
 
-        // Ищем товар по каждому слову запроса отдельно (а не по фразе целиком),
-        // чтобы порядок слов и пунктуация ("Цемент (Гежуба М450)" vs
-        // "Гежуба М450 Цемент") не мешали найти совпадение.
         const words = String(parsed.productQuery || "")
             .split(/\s+/)
             .map(w => w.trim())
@@ -92,7 +86,6 @@ router.post('/api/incidents/parse', express.json(), async (req, res) => {
 });
 
 // ---------- GET /admin/api/employees ----------
-// Список сотрудников с суммой их убытков (для справки при расчёте ЗП)
 router.get('/api/employees', async (req, res) => {
     try {
         const employees = await Employee.find().sort({ name: 1 });
@@ -108,6 +101,8 @@ router.get('/api/employees', async (req, res) => {
                 name: e.name,
                 position: e.position || "",
                 phone: e.phone || "",
+                username: e.username || "",
+                bonusPercent: e.bonusPercent || 0,
                 totalLoss: agg[0]?.totalLoss || 0,
                 incidentCount: agg[0]?.count || 0
             };
@@ -121,24 +116,82 @@ router.get('/api/employees', async (req, res) => {
 });
 
 // ---------- POST /admin/api/employees ----------
+// Теперь также принимает логин/пароль (для входа на /sell) и процент
+// бонуса (для расчёта ежемесячных бонусов) — оба поля необязательны.
 router.post('/api/employees', express.json(), async (req, res) => {
     try {
-        const { name, position, phone } = req.body || {};
+        const { name, position, phone, username, password, bonusPercent } = req.body || {};
 
         if (!name || !name.trim()) {
             return res.status(400).json({ error: "Укажите имя сотрудника" });
         }
 
+        if (username && username.trim()) {
+            const existing = await Employee.findOne({ username: username.trim() });
+            if (existing) {
+                return res.status(400).json({ error: "Такой логин уже занят" });
+            }
+        }
+
         const employee = await Employee.create({
             name: name.trim(),
             position: position?.trim() || undefined,
-            phone: phone?.trim() || undefined
+            phone: phone?.trim() || undefined,
+            username: username?.trim() || undefined,
+            password: password?.trim() || undefined,
+            bonusPercent: bonusPercent != null && bonusPercent !== "" ? Number(bonusPercent) : 0
         });
 
         res.status(201).json(employee);
     } catch (err) {
+        if (err.code === 11000) {
+            return res.status(400).json({ error: "Такой логин уже занят" });
+        }
         console.error("EMPLOYEES create error:", err);
         res.status(500).json({ error: "Ошибка добавления сотрудника" });
+    }
+});
+
+// ---------- PUT /admin/api/employees/:id ----------
+// Редактирование существующего сотрудника — в частности, чтобы можно
+// было позже добавить логин/пароль/процент бонуса тому, у кого их не было.
+router.put('/api/employees/:id', express.json(), async (req, res) => {
+    try {
+        const { name, position, phone, username, password, bonusPercent } = req.body || {};
+
+        if (username && username.trim()) {
+            const existing = await Employee.findOne({ username: username.trim(), _id: { $ne: req.params.id } });
+            if (existing) {
+                return res.status(400).json({ error: "Такой логин уже занят" });
+            }
+        }
+
+        const update = {
+            name: name?.trim(),
+            position: position?.trim() || undefined,
+            phone: phone?.trim() || undefined,
+            username: username?.trim() || undefined,
+            bonusPercent: bonusPercent != null && bonusPercent !== "" ? Number(bonusPercent) : 0
+        };
+
+        // Пароль обновляем, только если реально прислали новый —
+        // пустое поле не должно затирать уже существующий пароль.
+        if (password && password.trim()) {
+            update.password = password.trim();
+        }
+
+        const employee = await Employee.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true });
+        if (!employee) {
+            return res.status(404).json({ error: "Сотрудник не найден" });
+        }
+
+        res.json(employee);
+    } catch (err) {
+        if (err.code === 11000) {
+            return res.status(400).json({ error: "Такой логин уже занят" });
+        }
+        console.error("EMPLOYEES update error:", err);
+        res.status(500).json({ error: "Ошибка обновления сотрудника" });
     }
 });
 
@@ -149,8 +202,6 @@ router.delete('/api/employees/:id', async (req, res) => {
         if (!deleted) {
             return res.status(404).json({ error: "Сотрудник не найден" });
         }
-        // Записи о косяках оставляем как есть (там уже сохранён снимок имени) —
-        // история убытков не должна исчезать при удалении сотрудника из списка.
         res.json({ ok: true });
     } catch (err) {
         console.error("EMPLOYEES delete error:", err);
@@ -171,7 +222,6 @@ router.get('/api/employees/:id/incidents', async (req, res) => {
 });
 
 // ---------- GET /admin/api/incidents/categories ----------
-// Список категорий товаров — для фильтра на странице сотрудников.
 router.get('/api/incidents/categories', async (req, res) => {
     try {
         const categories = await Product.distinct('category');
@@ -194,7 +244,7 @@ function buildIncidentMatchStage({ dateFrom, dateTo, employeeId, search }) {
     if (employeeId) {
         match.employee = mongoose.Types.ObjectId.isValid(employeeId)
             ? new mongoose.Types.ObjectId(employeeId)
-            : null; // некорректный id — просто ничего не найдёт
+            : null;
     }
 
     if (search && search.trim()) {
@@ -211,8 +261,6 @@ function buildIncidentMatchStage({ dateFrom, dateTo, employeeId, search }) {
 }
 
 // ---------- GET /admin/api/incidents/list ----------
-// Общий список инцидентов (не по одному сотруднику) с фильтрами и пагинацией —
-// для главной таблицы на странице "Сотрудники".
 router.get('/api/incidents/list', async (req, res) => {
     try {
         const {
@@ -287,7 +335,6 @@ router.get('/api/incidents/list', async (req, res) => {
 });
 
 // ---------- GET /admin/api/incidents/stats ----------
-// Сводка для карточек сверху + сайдбар (топ-5 сотрудников, топ-3 товара).
 router.get('/api/incidents/stats', async (req, res) => {
     try {
         const { dateFrom, dateTo } = req.query;
@@ -352,8 +399,6 @@ router.get('/api/incidents/stats', async (req, res) => {
 });
 
 // ---------- POST /admin/api/incidents ----------
-// Записывает "косяк": списывает товар со склада (он больше не продаётся)
-// и фиксирует убыток по закупочной цене за конкретным сотрудником.
 router.post('/api/incidents', express.json(), async (req, res) => {
     try {
         const { employeeId, productCode, quantity, reason } = req.body || {};
@@ -375,7 +420,6 @@ router.post('/api/incidents', express.json(), async (req, res) => {
         const qty = Number(quantity);
         const lossValue = product.purchasePrice != null ? product.purchasePrice * qty : null;
 
-        // Списываем товар со склада — он больше не подлежит продаже
         product.qty = Math.max(0, product.qty - qty);
         await product.save();
 
@@ -398,7 +442,6 @@ router.post('/api/incidents', express.json(), async (req, res) => {
 });
 
 // ---------- DELETE /admin/api/incidents/:id ----------
-// Удаление ошибочной записи — возвращает товар обратно на склад.
 router.delete('/api/incidents/:id', async (req, res) => {
     try {
         const incident = await Incident.findById(req.params.id);

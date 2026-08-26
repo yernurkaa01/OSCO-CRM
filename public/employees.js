@@ -214,9 +214,9 @@
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
-      <div class="modal" style="width:420px;">
+      <div class="modal" style="width:460px;">
         <h3>Сотрудники</h3>
-        <div id="mgmtList" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
+        <div id="mgmtList" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;"></div>
         <button class="btn btn-primary" id="mgmtAddBtn" style="align-self:flex-start;">+ Добавить сотрудника</button>
         <div class="modal-actions">
           <button id="mgmtClose">Закрыть</button>
@@ -228,8 +228,14 @@
     function renderList() {
       overlay.querySelector('#mgmtList').innerHTML = allEmployees.map(e => `
         <div class="cat-row">
-          <span>${e.name}${e.position ? ` \u2014 <span style="color:#8a8f98;">${e.position}</span>` : ''}</span>
-          <button title="Удалить" data-id="${e.id}">\u{1F5D1}\uFE0F</button>
+          <span>
+            ${e.name}${e.position ? ` \u2014 <span style="color:#8a8f98;">${e.position}</span>` : ''}
+            ${e.username ? `<br><span style="color:#2551d9;font-size:12px;">\u{1F511} ${e.username}</span>` : '<br><span style="color:#c0392b;font-size:12px;">нет логина для /sell</span>'}
+          </span>
+          <span>
+            <button title="Изменить" data-edit-id="${e.id}">\u270F\uFE0F</button>
+            <button title="Удалить" data-id="${e.id}">\u{1F5D1}\uFE0F</button>
+          </span>
         </div>
       `).join('') || '<div style="color:#8a8f98;padding:8px 0;">Сотрудников пока нет</div>';
 
@@ -240,6 +246,17 @@
           await loadEmployeeOptions();
           renderList();
           refreshAll();
+        };
+      });
+
+      overlay.querySelectorAll('#mgmtList button[data-edit-id]').forEach(btn => {
+        btn.onclick = () => {
+          const employee = allEmployees.find(e => e.id === btn.dataset.editId);
+          openAddEmployeeModal(async () => {
+            await loadEmployeeOptions();
+            renderList();
+            refreshAll();
+          }, employee);
         };
       });
     }
@@ -256,24 +273,39 @@
     };
   }
 
-  function openAddEmployeeModal(onDone) {
+  // employee передаётся только при РЕДАКТИРОВАНИИ существующего — если не
+  // передан, форма работает в режиме добавления нового сотрудника.
+  function openAddEmployeeModal(onDone, employee) {
+    const isEdit = !!employee;
+
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
     overlay.innerHTML = `
       <div class="modal">
-        <h3>Добавить сотрудника</h3>
+        <h3>${isEdit ? 'Изменить сотрудника' : 'Добавить сотрудника'}</h3>
         <label>Имя
-          <input type="text" id="newEmpName" placeholder="Например: Дастан">
+          <input type="text" id="newEmpName" placeholder="Например: Дастан" value="${employee?.name || ''}">
         </label>
         <label>Должность <span style="color:#999;font-weight:normal;">(необязательно)</span>
-          <input type="text" id="newEmpPosition" placeholder="Водитель">
+          <input type="text" id="newEmpPosition" placeholder="Водитель" value="${employee?.position || ''}">
         </label>
         <label>Телефон <span style="color:#999;font-weight:normal;">(необязательно)</span>
-          <input type="text" id="newEmpPhone" placeholder="+7...">
+          <input type="text" id="newEmpPhone" placeholder="+7..." value="${employee?.phone || ''}">
+        </label>
+        <hr style="margin:14px 0;border:none;border-top:1px solid #eee;">
+        <p style="color:#8a8f98;font-size:12px;margin:0 0 8px;">Для входа в мобильный интерфейс продаж (/sell) — необязательно</p>
+        <label>Логин
+          <input type="text" id="newEmpUsername" placeholder="Например: dastan" value="${employee?.username || ''}">
+        </label>
+        <label>Пароль ${isEdit ? '<span style="color:#999;font-weight:normal;">(оставьте пустым, чтобы не менять)</span>' : ''}
+          <input type="text" id="newEmpPassword" placeholder="Придумайте пароль">
+        </label>
+        <label>Процент бонуса от личных продаж <span style="color:#999;font-weight:normal;">(необязательно, 0 — без бонуса)</span>
+          <input type="number" id="newEmpBonus" min="0" max="100" step="0.5" value="${employee?.bonusPercent || 0}">
         </label>
         <div class="modal-actions">
           <button id="empCancel">Отмена</button>
-          <button id="empSave">Добавить</button>
+          <button id="empSave">${isEdit ? 'Сохранить' : 'Добавить'}</button>
         </div>
       </div>
     `;
@@ -298,20 +330,28 @@
         return;
       }
 
+      const body = {
+        name,
+        position: overlay.querySelector('#newEmpPosition').value.trim(),
+        phone: overlay.querySelector('#newEmpPhone').value.trim(),
+        username: overlay.querySelector('#newEmpUsername').value.trim(),
+        password: overlay.querySelector('#newEmpPassword').value.trim(),
+        bonusPercent: overlay.querySelector('#newEmpBonus').value
+      };
+
       try {
-        const res = await fetch(`${API}/employees`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            position: overlay.querySelector('#newEmpPosition').value.trim(),
-            phone: overlay.querySelector('#newEmpPhone').value.trim()
-          })
-        });
+        const res = await fetch(
+          isEdit ? `${API}/employees/${employee.id}` : `${API}/employees`,
+          {
+            method: isEdit ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          }
+        );
 
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          alert(err.error || 'Ошибка добавления');
+          alert(err.error || 'Ошибка сохранения');
           isSaving = false; saveBtn.disabled = false; saveBtn.textContent = originalText;
           return;
         }
