@@ -8,51 +8,57 @@
 </head>
 <body>
 <div class="nav">
-<a class="nav-link" href="/admin">📦 Заказы</a>
-<a class="nav-link" href="/admin/clients">👥 Клиенты</a>
-<a class="nav-link" href="/admin/history">📜 История действий</a>
-<a class="nav-link" href="/admin/warehouse">📦 Склад</a>
-<a class="nav-link" href="/admin/reports">📊 Отчёты</a>
-<a class="nav-link" href="/admin/employees">👷 Сотрудники</a>
-<a class="nav-link" href="/admin/stock-movements">🔄 Движение товара</a>
-<a class="nav-link" href="/admin/order-lookup">🔎 Проверка заказа</a>
-<a class="nav-link active" href="/admin/seller-sales">🛒 Продавцы</a>
-<a class="nav-link logout-link" href="/logout">Выйти</a>
+  <a class="nav-link" href="/admin">📦 Заказы</a>
+  <a class="nav-link" href="/admin/clients">👥 Клиенты</a>
+  <a class="nav-link" href="/admin/history">📜 История действий</a>
+  <a class="nav-link" href="/admin/warehouse">📦 Склад</a>
+  <a class="nav-link" href="/admin/reports">📊 Отчёты</a>
+  <a class="nav-link" href="/admin/employees">👷 Сотрудники</a>
+  <a class="nav-link" href="/admin/stock-movements">🔄 Движение товара</a>
+  <a class="nav-link active" href="/admin/seller-sales">🧑‍💼 Продавцы</a>
+  <a class="nav-link logout-link" href="/logout">Выйти</a>
 </div>
 
-<div class="warehouse-container">
+<div class="warehouse-container" style="display:block;">
 <main class="warehouse-content" style="width:100%;">
-<h1>🛒 Продажи продавцов</h1>
-<p style="color:#8a8f98;margin-top:-10px;">Все продажи, оформленные сотрудниками через /sell — объединено по всем сразу</p>
 
-<div class="warehouse-toolbar">
-<select id="employeeFilter" class="warehouse-select">
-<option value="">Все продавцы</option>
-</select>
-<input type="date" id="fromDate" class="warehouse-search" style="max-width:160px;">
-<input type="date" id="toDate" class="warehouse-search" style="max-width:160px;">
-<button class="btn" id="applyFilterBtn">Применить</button>
-</div>
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px;">
+    <div>
+      <h1 style="margin-bottom:2px;">🧑‍💼 Продавцы</h1>
+      <p style="color:#8a8f98; margin:0;">Список всех продавцов и их показатели</p>
+    </div>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <input type="text" id="sellerSearch" class="warehouse-search" style="min-width:220px;" placeholder="Поиск продавца...">
+      <button class="btn btn-primary" id="addSellerBtn">+ Добавить продавца</button>
+    </div>
+  </div>
 
-<div class="stats-row" id="statsRow" style="margin-bottom:20px;"></div>
+  <div id="sellersGrid" class="stats-row" style="grid-template-columns: repeat(3, 1fr);">
+    <div class="empty-state">Загрузка...</div>
+  </div>
 
-<div class="table-card">
-<h2>Продажи</h2>
-<table class="warehouse-table">
-<thead>
-<tr>
-<th>Дата</th>
-<th>Продавец</th>
-<th>Товары</th>
-<th>Код заказа</th>
-<th>Сумма</th>
-</tr>
-</thead>
-<tbody id="salesBody">
-<tr><td colspan="5"><div class="empty-state">Загрузка...</div></td></tr>
-</tbody>
-</table>
-</div>
+  <div class="table-card" style="padding:18px 22px; display:flex; gap:32px; flex-wrap:wrap;">
+    <div>
+      <div class="stat-label">Всего продавцов</div>
+      <div class="stat-value" id="sumTotalSellers">—</div>
+      <div class="stat-sub" id="sumActiveSellers"></div>
+    </div>
+    <div>
+      <div class="stat-label">Всего заказов</div>
+      <div class="stat-value" id="sumTotalOrders">—</div>
+      <div class="stat-sub" id="sumOrdersToday"></div>
+    </div>
+    <div>
+      <div class="stat-label">Общая выручка</div>
+      <div class="stat-value" id="sumTotalRevenue">—</div>
+      <div class="stat-sub" id="sumRevenueToday"></div>
+    </div>
+    <div>
+      <div class="stat-label">Общая прибыль</div>
+      <div class="stat-value" id="sumTotalProfit">—</div>
+      <div class="stat-sub" id="sumProfitToday"></div>
+    </div>
+  </div>
 
 </main>
 </div>
