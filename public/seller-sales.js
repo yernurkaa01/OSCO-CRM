@@ -178,7 +178,7 @@
 
     overlay.querySelector('#sellerSave').onclick = async () => {
       const name = overlay.querySelector('#newSellerName').value.trim();
-      const username = overlay.querySelector('#newSellerUsername').value.trim(); 
+      const username = overlay.querySelector('#newSellerUsername').value.trim();
       const password = overlay.querySelector('#newSellerPassword').value.trim();
 
       if (!name) { alert('Укажите имя'); return; }
