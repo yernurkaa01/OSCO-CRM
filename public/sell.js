@@ -80,10 +80,25 @@
     const listEl = document.getElementById('historyList');
     listEl.innerHTML = 'Загрузка...';
 
-    const res = await fetch('/employee/my-sales');
-    const orders = await res.json();
+    let res, orders;
+    try {
+      res = await fetch('/employee/my-sales');
+      orders = await res.json();
+    } catch (e) {
+      listEl.innerHTML = '<div style="color:#c0392b;">Ошибка сети, попробуйте ещё раз</div>';
+      return;
+    }
 
-    if (!orders.length) {
+    // КРИТИЧНО: сначала проверяем res.ok — иначе ответ вида {error: "..."}
+    // (401 при проблеме с сессией, 500 и т.п.) молча трактуется как "нет
+    // продаж", потому что у объекта ошибки orders.length === undefined,
+    // что тоже "ложно". Из-за этого реальная проблема была не видна.
+    if (!res.ok) {
+      listEl.innerHTML = `<div style="color:#c0392b;">⚠️ ${orders.error || 'Не удалось загрузить историю (код ' + res.status + ')'}</div>`;
+      return;
+    }
+
+    if (!Array.isArray(orders) || !orders.length) {
       listEl.innerHTML = '<div style="color:#8a8f98;">Продаж пока нет</div>';
       return;
     }
