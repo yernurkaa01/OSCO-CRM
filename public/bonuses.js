@@ -113,19 +113,19 @@
   // карточка покажет, сколько именно доплатить, а не всю сумму заново.
   function openUnlockConfirm(bonusId) {
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
+    overlay.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;');
     overlay.innerHTML = `
-      <div class="modal">
-        <h3>Разблокировать запись?</h3>
+      <div style="background:#fff;border-radius:12px;padding:24px;width:380px;display:flex;flex-direction:column;gap:12px;">
+        <h3 style="margin:0;">Разблокировать запись?</h3>
         <p style="color:#666; font-size:14px; margin:0;">
           Статус "Выплачено" снимется, и при следующем нажатии «Рассчитать» за
           этот месяц сумма пересчитается заново с учётом новых продаж.
           Уже выплаченная сумма не потеряется — при доплате карточка покажет
           разницу, а не весь новый бонус целиком.
         </p>
-        <div class="modal-actions">
-          <button id="unlockCancel">Отмена</button>
-          <button id="unlockConfirm" class="btn btn-primary">Разблокировать</button>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+          <button id="unlockCancel" style="padding:8px 16px;border-radius:6px;border:none;background:#eee;cursor:pointer;">Отмена</button>
+          <button id="unlockConfirm" class="btn btn-primary" style="padding:8px 16px;">Разблокировать</button>
         </div>
       </div>
     `;
@@ -150,17 +150,17 @@
   // (случайный клик), а откатить потом можно только вручную через базу.
   function openMarkPaidConfirm(bonusId) {
     const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
+    overlay.setAttribute('style', 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;');
     overlay.innerHTML = `
-      <div class="modal">
-        <h3>Отметить бонус выплаченным?</h3>
+      <div style="background:#fff;border-radius:12px;padding:24px;width:380px;display:flex;flex-direction:column;gap:12px;">
+        <h3 style="margin:0;">Отметить бонус выплаченным?</h3>
         <p style="color:#666; font-size:14px; margin:0;">
           После этого сумма будет зафиксирована навсегда — даже если у сотрудника
           появятся новые продажи за этот месяц, бонус больше не пересчитается.
         </p>
-        <div class="modal-actions">
-          <button id="markPaidCancel">Отмена</button>
-          <button id="markPaidConfirm" class="btn btn-primary">Да, выплачено</button>
+        <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+          <button id="markPaidCancel" style="padding:8px 16px;border-radius:6px;border:none;background:#eee;cursor:pointer;">Отмена</button>
+          <button id="markPaidConfirm" class="btn btn-primary" style="padding:8px 16px;">Да, выплачено</button>
         </div>
       </div>
     `;
