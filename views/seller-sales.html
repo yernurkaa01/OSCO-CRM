@@ -16,8 +16,6 @@
   <a class="nav-link" href="/admin/employees">👷 Сотрудники</a>
   <a class="nav-link" href="/admin/stock-movements">🔄 Движение товара</a>
   <a class="nav-link active" href="/admin/seller-sales">🧑‍💼 Продавцы</a>
-  <a class="nav-link" href="/admin/bonuses">💰 Бонусы</a>
-
   <a class="nav-link logout-link" href="/logout">Выйти</a>
 </div>
 
@@ -30,10 +28,12 @@
       <p style="color:#8a8f98; margin:0;">Список всех продавцов и их показатели</p>
     </div>
     <div style="display:flex; gap:10px; align-items:center;">
-      <input type="text" id="sellerSearch" class="warehouse-search" style="min-width:220px;" placeholder="Поиск продавца...">
+      <input type="text" id="orderSearch" class="warehouse-search" style="min-width:280px;" placeholder="Поиск по товару или коду заказа...">
       <button class="btn btn-primary" id="addSellerBtn">+ Добавить продавца</button>
     </div>
   </div>
+
+  <div id="orderSearchResults" style="display:none; margin-bottom:20px;"></div>
 
   <div id="sellersGrid" class="stats-row" style="grid-template-columns: repeat(3, 1fr);">
     <div class="empty-state">Загрузка...</div>

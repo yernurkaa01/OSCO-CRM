@@ -98,10 +98,60 @@
     renderSummary(data);
   }
 
-  document.getElementById('sellerSearch').addEventListener('input', (e) => {
-    const q = e.target.value.trim().toLowerCase();
-    const filtered = q ? allSellers.filter(s => s.name.toLowerCase().includes(q)) : allSellers;
-    renderCards(filtered);
+  // ---------- Поиск по товару/коду заказа — "кто это продал" ----------
+  let orderSearchTimer = null;
+  document.getElementById('orderSearch').addEventListener('input', (e) => {
+    clearTimeout(orderSearchTimer);
+    const q = e.target.value.trim();
+    const resultsEl = document.getElementById('orderSearchResults');
+    const grid = document.getElementById('sellersGrid');
+
+    if (!q) {
+      resultsEl.style.display = 'none';
+      grid.style.display = 'grid';
+      return;
+    }
+
+    orderSearchTimer = setTimeout(async () => {
+      const res = await fetch(`${API}/seller-sales?search=${encodeURIComponent(q)}`);
+      const data = await res.json();
+
+      grid.style.display = 'none';
+      resultsEl.style.display = 'block';
+
+      if (!data.orders.length) {
+        resultsEl.innerHTML = '<div class="empty-state">Ничего не найдено</div>';
+        return;
+      }
+
+      resultsEl.innerHTML = `
+        <div class="table-card">
+          <h2>Найдено по запросу «${q}» — ${data.orders.length} заказ(ов)</h2>
+          <table class="warehouse-table">
+            <thead>
+              <tr>
+                <th>Дата</th>
+                <th>Код заказа</th>
+                <th>Товар</th>
+                <th>Продавец</th>
+                <th>Сумма</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.orders.map(o => `
+                <tr>
+                  <td>${formatDate(o.createdAt)}</td>
+                  <td>${o.orderCode}</td>
+                  <td>${o.items.map(i => `${i.product} — ${i.count}`).join('<br>')}</td>
+                  <td><b>${o.employeeName || '—'}</b></td>
+                  <td style="font-weight:700; color:#1a9d52;">${formatMoney(o.total)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }, 300);
   });
 
   // ---------- Профиль продавца — вся его история продаж ----------
