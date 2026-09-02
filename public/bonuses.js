@@ -86,27 +86,105 @@
             <div>
               <div class="stat-label">Бонус</div>
               <div style="font-weight:700; color:#1a9d52; font-size:17px;">${formatMoney(b.bonusAmount)}</div>
+              ${b.paid && b.paidAmount != null && b.bonusAmount > b.paidAmount
+                ? `<div style="color:#e08a1e; font-size:12px; margin-top:2px;">Выплачено ранее: ${formatMoney(b.paidAmount)} · доплатить: ${formatMoney(b.bonusAmount - b.paidAmount)}</div>`
+                : ''}
             </div>
-            ${b.paid ? '' : `<button class="btn btn-primary" data-mark-paid="${b._id}">Отметить выплаченным</button>`}
+            ${b.paid
+              ? `<button class="btn" data-unlock="${b._id}" style="font-size:13px;">🔓 Разблокировать</button>`
+              : `<button class="btn btn-primary" data-mark-paid="${b._id}">Отметить выплаченным</button>`}
           </div>
         </div>
       `;
     }).join('');
 
-    grid.querySelectorAll('[data-mark-paid]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        btn.textContent = 'Сохранение…';
-        const res = await fetch(`${API}/bonuses/${btn.dataset.markPaid}/mark-paid`, { method: 'POST' });
-        if (!res.ok) {
-          alert('Не удалось отметить как выплачено');
-          btn.disabled = false;
-          btn.textContent = 'Отметить выплаченным';
-          return;
-        }
-        loadBonuses();
-      });
+    grid.querySelectorAll('[data-unlock]').forEach(btn => {
+      btn.addEventListener('click', () => openUnlockConfirm(btn.dataset.unlock));
     });
+
+    grid.querySelectorAll('[data-mark-paid]').forEach(btn => {
+      btn.addEventListener('click', () => openMarkPaidConfirm(btn.dataset.markPaid));
+    });
+  }
+
+  // Разблокировка выплаченной записи — на случай, если отметили "выплачено"
+  // раньше конца месяца, а потом появились ещё продажи. paidAmount остаётся
+  // как снимок того, что уже реально отдано — при следующем пересчёте
+  // карточка покажет, сколько именно доплатить, а не всю сумму заново.
+  function openUnlockConfirm(bonusId) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>Разблокировать запись?</h3>
+        <p style="color:#666; font-size:14px; margin:0;">
+          Статус "Выплачено" снимется, и при следующем нажатии «Рассчитать» за
+          этот месяц сумма пересчитается заново с учётом новых продаж.
+          Уже выплаченная сумма не потеряется — при доплате карточка покажет
+          разницу, а не весь новый бонус целиком.
+        </p>
+        <div class="modal-actions">
+          <button id="unlockCancel">Отмена</button>
+          <button id="unlockConfirm" class="btn btn-primary">Разблокировать</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#unlockCancel').onclick = () => overlay.remove();
+
+    overlay.querySelector('#unlockConfirm').onclick = async () => {
+      const res = await fetch(`${API}/bonuses/${bonusId}/unmark-paid`, { method: 'POST' });
+      if (!res.ok) {
+        alert('Не удалось разблокировать запись');
+      }
+      overlay.remove();
+      loadBonuses();
+      loadPendingMonths();
+    };
+  }
+
+  // Подтверждение перед отметкой "выплачено" — после этого действия сумма
+  // навсегда замораживается и больше не будет пересчитываться, даже если
+  // у сотрудника появятся новые продажи за этот месяц. Ошибиться легко
+  // (случайный клик), а откатить потом можно только вручную через базу.
+  function openMarkPaidConfirm(bonusId) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.innerHTML = `
+      <div class="modal">
+        <h3>Отметить бонус выплаченным?</h3>
+        <p style="color:#666; font-size:14px; margin:0;">
+          После этого сумма будет зафиксирована навсегда — даже если у сотрудника
+          появятся новые продажи за этот месяц, бонус больше не пересчитается.
+        </p>
+        <div class="modal-actions">
+          <button id="markPaidCancel">Отмена</button>
+          <button id="markPaidConfirm" class="btn btn-primary">Да, выплачено</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#markPaidCancel').onclick = () => overlay.remove();
+
+    overlay.querySelector('#markPaidConfirm').onclick = async () => {
+      const confirmBtn = overlay.querySelector('#markPaidConfirm');
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = 'Сохранение…';
+
+      const res = await fetch(`${API}/bonuses/${bonusId}/mark-paid`, { method: 'POST' });
+
+      if (!res.ok) {
+        alert('Не удалось отметить как выплачено');
+        overlay.remove();
+        return;
+      }
+
+      overlay.remove();
+      loadBonuses();
+      loadPendingMonths();
+    };
   }
 
   function populateMonthFilter(bonuses) {
@@ -117,6 +195,41 @@
     select.innerHTML = '<option value="">Все месяцы</option>' +
       months.map(m => `<option value="${m}">${monthLabel(m)}</option>`).join('');
     select.value = currentVal;
+  }
+
+  async function loadPendingMonths() {
+    const res = await fetch(`${API}/bonuses/pending`);
+    const pending = await res.json();
+
+    const panel = document.getElementById('pendingPanel');
+    const list = document.getElementById('pendingList');
+
+    if (!pending.length) {
+      panel.style.display = 'none';
+      return;
+    }
+
+    panel.style.display = 'block';
+    list.innerHTML = pending.map(p => `
+      <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid #f0d9a0;">
+        <span><b>${p.employeeName}</b> — ${monthLabel(p.month)}: продано на ${formatMoney(p.totalSales)}, бонус ещё не считался</span>
+        <button class="btn btn-primary" data-quick-calc="${p.month}">Рассчитать</button>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('[data-quick-calc]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Считаем…';
+        await fetch(`${API}/bonuses/calculate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ month: btn.dataset.quickCalc })
+        });
+        loadBonuses();
+        loadPendingMonths();
+      });
+    });
   }
 
   async function loadBonuses() {
@@ -170,6 +283,7 @@
 
       document.getElementById('filterMonth').value = month;
       loadBonuses();
+      loadPendingMonths();
     } catch (e) {
       alert('Ошибка сети, попробуйте ещё раз');
     } finally {
@@ -179,4 +293,5 @@
   });
 
   loadBonuses();
+  loadPendingMonths();
 })();

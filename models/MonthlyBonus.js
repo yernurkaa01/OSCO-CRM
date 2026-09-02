@@ -5,20 +5,25 @@ import mongoose from "mongoose"
 // если процент сотрудника или его продажи задним числом поменяются —
 // это осознанная защита от путаницы "а почему в том месяце было иначе".
 const monthlyBonusSchema = new mongoose.Schema({
-    employee: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
-    employeeName: String,   // снимок имени на момент расчёта
+employee: { type: mongoose.Schema.Types.ObjectId, ref: "Employee", required: true },
+employeeName: String,   // снимок имени на момент расчёта
 
-    month: { type: String, required: true },   // формат "2026-08"
+month: { type: String, required: true },   // формат "2026-08"
 
-    totalSales: { type: Number, required: true },   // сумма личных продаж сотрудника за месяц
-    bonusPercent: { type: Number, required: true },  // процент, применённый именно в этом расчёте
-    bonusAmount: { type: Number, required: true },   // итоговая сумма бонуса
+totalSales: { type: Number, required: true },   // сумма личных продаж сотрудника за месяц
+bonusPercent: { type: Number, required: true },  // процент, применённый именно в этом расчёте
+bonusAmount: { type: Number, required: true },   // итоговая сумма бонуса
 
-    paid: { type: Boolean, default: false },   // выплачено ли
+paid: { type: Boolean, default: false },   // выплачено ли
+paidAmount: Number,   // снимок суммы, которая была выплачена (на случай,
+                       // если запись потом разблокируют и пересчитают —
+                       // чтобы знать, сколько уже отдано, а не заплатить
+                       // сотруднику весь новый бонус ещё раз целиком)
+paidAt: Date,
 
-    createdAt: {
-        type: Date,
-        default: Date.now
+createdAt: {
+type: Date,
+default: Date.now
     }
 })
 

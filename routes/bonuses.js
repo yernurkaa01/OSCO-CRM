@@ -103,17 +103,84 @@ res.status(500).json({ error: "Ошибка загрузки бонусов" });
 // ---------- POST /admin/api/bonuses/:id/mark-paid ----------
 router.post('/api/bonuses/:id/mark-paid', async (req, res) => {
 try {
+const existing = await MonthlyBonus.findById(req.params.id);
+if (!existing) return res.status(404).json({ error: "Запись не найдена" });
+
+existing.paid = true;
+existing.paidAmount = existing.bonusAmount;
+existing.paidAt = new Date();
+await existing.save();
+
+res.json(existing);
+
+    } catch (err) {
+console.error("BONUSES mark-paid error:", err);
+res.status(500).json({ error: "Ошибка обновления" });
+    }
+});
+
+// ---------- POST /admin/api/bonuses/:id/unmark-paid ----------
+// Разблокирует запись — снимает статус "выплачено", чтобы можно было
+// пересчитать месяц заново (например, если отметили выплату раньше
+// окончания месяца, а потом появились ещё продажи). paidAmount НЕ
+// стираем — это история того, сколько уже реально отдано, пригодится
+// при следующем расчёте, чтобы не заплатить всю новую сумму ещё раз.
+router.post('/api/bonuses/:id/unmark-paid', async (req, res) => {
+try {
 const bonus = await MonthlyBonus.findByIdAndUpdate(
 req.params.id,
-            { paid: true },
+            { paid: false },
             { new: true }
         );
 if (!bonus) return res.status(404).json({ error: "Запись не найдена" });
 res.json(bonus);
 
     } catch (err) {
-console.error("BONUSES mark-paid error:", err);
+console.error("BONUSES unmark-paid error:", err);
 res.status(500).json({ error: "Ошибка обновления" });
+    }
+});
+
+// ---------- GET /admin/api/bonuses/pending ----------
+// Находит месяцы, в которых у сотрудника ЕСТЬ продажи через /sell, но
+// расчёт бонуса за этот месяц ЕЩЁ НИ РАЗУ не запускался. Без этой проверки
+// такая выручка видна в общей сумме на странице "Продавцы" (там считается
+// вообще всё, без разбора по месяцам), но полностью невидима на "Бонусы" —
+// легко забыть посчитать какой-то месяц и заплатить сотруднику меньше.
+router.get('/api/bonuses/pending', async (req, res) => {
+    try {
+        const monthlyAgg = await Order.aggregate([
+            { $match: { source: "employee" } },
+            {
+                $group: {
+                    _id: {
+                        employee: "$soldByEmployee",
+                        month: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }
+                    },
+                    employeeName: { $first: "$soldByEmployeeName" },
+                    totalSales: { $sum: "$totalPrice" }
+                }
+            }
+        ]);
+
+        const existingBonuses = await MonthlyBonus.find({}, { employee: 1, month: 1 });
+        const existingSet = new Set(existingBonuses.map(b => `${b.employee}_${b.month}`));
+
+        const pending = monthlyAgg
+            .filter(m => !existingSet.has(`${m._id.employee}_${m._id.month}`))
+            .map(m => ({
+                employee: m._id.employee?.toString(),
+                employeeName: m.employeeName,
+                month: m._id.month,
+                totalSales: m.totalSales
+            }))
+            .sort((a, b) => a.month.localeCompare(b.month));
+
+        res.json(pending);
+
+    } catch (err) {
+        console.error("BONUSES pending error:", err);
+        res.status(500).json({ error: "Ошибка проверки непосчитанных месяцев" });
     }
 });
 
