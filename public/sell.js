@@ -19,6 +19,7 @@
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('saleScreen').style.display = 'block';
     document.getElementById('greeting').textContent = `Привет, ${name}`;
+    document.getElementById('saleResult').innerHTML = '';
   }
 
   async function checkAuth() {
@@ -57,6 +58,7 @@
     await fetch('/employee/logout', { method: 'POST' });
     cart = [];
     renderCart();
+    document.getElementById('saleResult').innerHTML = '';
     showLogin();
   });
 
@@ -105,7 +107,7 @@
 
     listEl.innerHTML = orders.map(o => `
       <div class="history-order">
-        <div class="items">${o.items.map(i => `${i.product} — ${i.count} шт`).join('<br>')}</div>
+        <div class="items">${o.items.map(i => `${i.product} — ${i.count}${i.unit ? ' ' + i.unit : ''}`).join('<br>')}</div>
         <div class="meta">
           <span>Код: ${o.orderCode}</span>
           <span>${formatDate(o.createdAt)}</span>
