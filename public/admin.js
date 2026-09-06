@@ -20,6 +20,7 @@ document.getElementById("linkOrders").href =
 
 let allOrders = []
 let currentSort = { field: "createdAt", direction: "desc" }
+let currentUserRole = null
 
 let lastPendingCount = 0
 let firstPendingLoad = true
@@ -231,7 +232,7 @@ function renderOrders() {
                              onclick="refundOrder('${o._id}')">
                                     Возврат
                             </button>` : ""}
-                      ${(o.status === "отклонено" || o.status === "отменено (таймаут)") ? `
+                      ${(currentUserRole === "owner" && (o.status === "отклонено" || o.status === "отменено (таймаут)")) ? `
                             <button class="details-btn" title="Восстановить заказ"
                               onclick="confirmRestoreOrder('${o._id}', '${o.orderCode}')"
                               style="padding:4px 8px;">
@@ -516,9 +517,15 @@ async function issueOrder(id) {
 // Возврат средств
 async function refundOrder(id) {
 
-    await fetch("/refund-order/" + id, {
+    const res = await fetch("/refund-order/" + id, {
         method: "POST"
     })
+
+    if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(data.error || "Не удалось оформить возврат")
+        return
+    }
 
     loadOrders()
 }
@@ -544,6 +551,14 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // Живой поиск
     document.getElementById("searchInput").addEventListener("input", renderOrders)
+
+    fetch("/whoami")
+        .then(res => res.json())
+        .then(data => {
+            currentUserRole = data.role
+            renderOrders() // перерисовать теперь, когда роль известна
+        })
+        .catch(() => {})
 
     loadOrders()
     loadPendingOrders()

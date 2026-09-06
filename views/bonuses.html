@@ -65,6 +65,11 @@
     </div>
   </div>
 
+  <div id="pendingPanel" style="display:none; background:#fff2e2; border:1px solid #f0c674; border-radius:12px; padding:16px 20px; margin-bottom:20px;">
+    <h3 style="margin:0 0 10px; color:#8a5a00;">⚠️ Есть непосчитанные продажи</h3>
+    <div id="pendingList"></div>
+  </div>
+
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
     <h2 style="margin:0; font-size:18px;">Начисления за месяц</h2>
     <select id="filterMonth" class="warehouse-select">
@@ -79,6 +84,7 @@
 </main>
 </div>
 
+<script src="/nav-guard.js"></script>
 <script src="/bonuses.js"></script>
 </body>
 </html>
