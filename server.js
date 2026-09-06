@@ -29,7 +29,7 @@ import bonusesApiRouter from "./routes/bonuses.js"
 import orderLookupApiRouter from "./routes/orderLookup.js"
 import sellerSalesApiRouter from "./routes/sellerSales.js"
 import employeeSalesRouter from "./routes/employeeSales.js"
-import { finalizeStock, releaseStock, restockStock } from "./services/stockCheck.js"
+import { finalizeStock, releaseStock, restockStock, reserveStock } from "./services/stockCheck.js"
 
 
 
@@ -501,7 +501,7 @@ await Order.findByIdAndUpdate(o._id, { status: "оплачено" })
     }
 
 const itemsList = ordersToConfirm
-        .map(o => `🛒 ${o.product} — ${o.count} шт.`)
+        .map(o => `🛒 ${o.product} — ${o.count} ${o.unit || 'шт'}.`)
         .join("\n")
 
 const grandTotal = ordersToConfirm.reduce((acc, o) => acc + (o.totalPrice || 0), 0)
@@ -626,6 +626,109 @@ orderId: order.orderCode
 res.json({
 success: true
     })
+
+})
+
+
+// ============================================================
+// RESTORE ORDER (отменить ошибочное отклонение)
+// ============================================================
+// Ситуация: кассир отклонил заказ (например, показалось, что сумма в
+// чеке не совпадает), а потом выяснилось — по факту оплата была верной
+// (например, проверили реальную банковскую выписку/приложение Kaspi,
+// а не только скриншот от клиента). Нужно вернуть заказ в "оплачено".
+//
+// ВАЖНО: нельзя просто повторно вызвать /confirm-order — при отклонении
+// releaseStock уже вернул товар в доступный остаток, и за прошедшее
+// время его мог купить кто-то другой. Слепой finalizeStock без проверки
+// увёл бы физический остаток в минус (пересорт/недостача на бумаге).
+// Поэтому здесь СНАЧАЛА заново атомарно резервируем нужное количество
+// (reserveStock сам проверит, действительно ли товар всё ещё в наличии),
+// и только при успехе — превращаем это в постоянное списание.
+app.post("/restore-order/:id", checkAuth, async (req, res) => {
+
+    const order = await Order.findById(req.params.id)
+
+    if (!order) {
+        return res.status(404).json({ error: "Заказ не найден" })
+    }
+
+    if (order.status !== "отклонено") {
+        return res.status(400).json({
+            error: `Восстановить можно только отклонённый заказ (сейчас статус: "${order.status}")`
+        })
+    }
+
+    // Находим ВСЕ позиции этого заказа (делят orderCode) — восстанавливаем
+    // и уведомляем клиента разом, как и при подтверждении/отклонении.
+    const siblingOrders = await Order.find({
+        orderCode: order.orderCode,
+        telegramId: order.telegramId,
+        status: "отклонено"
+    })
+    const ordersToRestore = siblingOrders.length ? siblingOrders : [order]
+
+    // Сначала пробуем зарезервировать ВСЕ позиции — если хоть одной не
+    // хватает в наличии, откатываем то, что успели зарезервировать,
+    // и сообщаем кассиру, что восстановить целиком нельзя.
+    const reserved = []
+    for (const o of ordersToRestore) {
+        const ok = await reserveStock(o.product, o.count)
+        if (!ok) {
+            for (const done of reserved) {
+                await releaseStock(done.product, done.count)
+            }
+            return res.status(409).json({
+                error: `Недостаточно остатка, чтобы восстановить: "${o.product}" — товар мог быть продан кому-то ещё, пока заказ был отклонён.`
+            })
+        }
+        reserved.push(o)
+    }
+
+    // Резерв на все позиции получен — превращаем в постоянное списание
+    for (const o of ordersToRestore) {
+        await finalizeStock(o.product, o.count)
+        await Order.findByIdAndUpdate(o._id, { status: "оплачено" })
+    }
+
+    const itemsList = ordersToRestore
+        .map(o => `🛒 ${o.product} — ${o.count} ${o.unit || 'шт'}.`)
+        .join("\n")
+
+    const grandTotal = ordersToRestore.reduce((acc, o) => acc + (o.totalPrice || 0), 0)
+
+    try {
+        await fetch(
+            `https://api.telegram.org/bot${process.env.BOT_TOKEN}/sendMessage`,
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    chat_id: order.telegramId,
+                    text:
+`✅ Ваш заказ восстановлен — оплата подтверждена!
+
+Код заказа: ${order.orderCode}
+
+${itemsList}
+
+💰 Итого: ${grandTotal.toLocaleString("ru-RU")} ₸
+
+Приносим извинения за путаницу.`
+                })
+            }
+        )
+    } catch (e) {
+        console.log("Не удалось уведомить клиента о восстановлении заказа:", e.message)
+    }
+
+    await Log.create({
+        user: req.session.user.username,
+        action: `Восстановил ошибочно отклонённый заказ (${ordersToRestore.length} поз.)`,
+        orderId: order.orderCode
+    })
+
+    res.json({ success: true })
 
 })
 

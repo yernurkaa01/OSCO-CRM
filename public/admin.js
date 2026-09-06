@@ -231,6 +231,12 @@ function renderOrders() {
                              onclick="refundOrder('${o._id}')">
                                     Возврат
                             </button>` : ""}
+                      ${(o.status === "отклонено" || o.status === "отменено (таймаут)") ? `
+                            <button class="details-btn" title="Восстановить заказ"
+                              onclick="confirmRestoreOrder('${o._id}', '${o.orderCode}')"
+                              style="padding:4px 8px;">
+                                ✏️
+                            </button>` : ""}
                     
                 </td>
             </tr>
@@ -422,6 +428,60 @@ function closeDetails() {
 window.onclick = function(event) {
     const modal = document.getElementById("detailsModal")
     if (event.target === modal) closeDetails()
+}
+
+
+// ============================================================
+// ВОССТАНОВЛЕНИЕ ОШИБОЧНО ОТКЛОНЁННОГО ЗАКАЗА
+// ============================================================
+
+// Показывает окно подтверждения перед восстановлением — это действие
+// заново списывает товар и уведомляет клиента, что оплата подтверждена,
+// поэтому не должно происходить от случайного клика.
+function confirmRestoreOrder(id, orderCode) {
+    const overlay = document.createElement("div")
+    overlay.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;"
+    overlay.innerHTML = `
+        <div style="background:#fff;border-radius:12px;padding:24px;width:380px;display:flex;flex-direction:column;gap:12px;">
+            <h3 style="margin:0;">Восстановить заказ #${orderCode}?</h3>
+            <p style="color:#666; font-size:14px; margin:0;">
+                Заказ снова станет "оплачено", товар спишется со склада ещё раз
+                (если он всё ещё в наличии), клиенту придёт уведомление в Telegram,
+                что оплата подтверждена. Используйте, только если отклонили заказ
+                по ошибке.
+            </p>
+            <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:8px;">
+                <button id="restoreCancel" style="padding:8px 16px;border-radius:6px;border:none;background:#eee;cursor:pointer;">Отмена</button>
+                <button id="restoreConfirm" style="padding:8px 16px;border-radius:6px;border:none;background:#000;color:#fff;cursor:pointer;">Да, восстановить</button>
+            </div>
+        </div>
+    `
+    document.body.appendChild(overlay)
+
+    overlay.querySelector("#restoreCancel").onclick = () => overlay.remove()
+
+    overlay.querySelector("#restoreConfirm").onclick = async () => {
+        const btn = overlay.querySelector("#restoreConfirm")
+        btn.disabled = true
+        btn.textContent = "Восстанавливаем…"
+
+        try {
+            const res = await fetch("/restore-order/" + id, { method: "POST" })
+            const data = await res.json()
+
+            if (!res.ok) {
+                alert(data.error || "Не удалось восстановить заказ")
+                overlay.remove()
+                return
+            }
+
+            overlay.remove()
+            loadOrders()
+        } catch (e) {
+            alert("Ошибка сети, попробуйте ещё раз")
+            overlay.remove()
+        }
+    }
 }
 
 
