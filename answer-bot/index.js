@@ -272,6 +272,18 @@ process.on("unhandledRejection", (err) => {
     console.error("Answer-bot: необработанная ошибка:", err)
 })
 
+// БЕЗ этого обработчика ошибка в обработке ОДНОГО сообщения (например,
+// Telegram отверг сообщение из-за неверной разметки) могла обрушить всю
+// сессию polling'а целиком — бот переставал отвечать вообще на любые
+// сообщения, а не только на то, что вызвало ошибку, и уходил в бесконечный
+// цикл перезапуска (launchWithRetry). Теперь ошибка в одном сообщении
+// логируется и клиенту приходит вежливый ответ, а бот продолжает
+// нормально работать для всех остальных.
+bot.catch((err, ctx) => {
+    console.error(`Answer-bot: ошибка при обработке сообщения от ${ctx.from?.id}:`, err)
+    ctx.reply("⚠️ Кешіріңіз, қате шықты. Қайталап жазып көріңіз.").catch(() => {})
+})
+
 bot.start(async (ctx) => {
     await ctx.reply(
         "👋 Сәлем! Мен дүкеннің көмекші-боты. Не істей аламын:\n\n" +
@@ -436,7 +448,7 @@ bot.on("text", async (ctx) => {
         return ctx.reply(
             "Мына тауарлар табылды:\n\n" +
             direct.map(formatProductLine).join("\n\n"),
-            { parse_mode: "Markdown" }
+            { parse_mode: "HTML" }
         )
     }
 
@@ -487,7 +499,7 @@ bot.on("text", async (ctx) => {
         return ctx.reply(
             "Сіз мына тауарлардың бірін айтқан болуыңыз мүмкін:\n\n" +
             matches.map(formatProductLine).join("\n\n"),
-            { parse_mode: "Markdown" }
+            { parse_mode: "HTML" }
         )
 
     } catch (e) {
@@ -495,13 +507,22 @@ bot.on("text", async (ctx) => {
         return ctx.reply("⚠️ Сұрауды өңдеу мүмкін болмады, қайталап көріңіз.")
     }
 })
+
 // Названия товаров иногда сами содержат символы, которые Telegram
 // воспринимает как разметку (* для жирного, _ для курсива и т.д.) —
-// например размеры гипсокартона "2500*1200*9,5мм". Без экранирования
-// наши СОБСТВЕННЫЕ звёздочки для жирного шрифта смешиваются со звёздочками
-// внутри названия, и Telegram "съедает" часть из них при разборе разметки.
-function escapeMarkdown(text) {
-    return String(text || "").replace(/([_*`\[])/g, "\\$1")
+// например размеры гипсокартона "2500*1200*9,5мм".
+// ВАЖНО: экранирование через "\*" работает ТОЛЬКО в parse_mode
+// "MarkdownV2", а НЕ в обычном "Markdown" — со старым Markdown обратный
+// слэш не распознаётся как экранирование вообще, и Telegram либо путает
+// пары звёздочек (пропадает часть текста), либо прямо отклоняет
+// сообщение с ошибкой "can't parse entities". Поэтому используем HTML
+// вместо Markdown — там жирный текст через <b>...</b>, а звёздочки внутри
+// названия товара вообще ничего не значат и не мешают.
+function escapeHtml(text) {
+    return String(text || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
 }
 
 async function replyWithProduct(ctx, p) {
@@ -509,11 +530,11 @@ async function replyWithProduct(ctx, p) {
     const status = available > 0 ? `✅ Қоймада бар: ${available} ${p.unit}` : "😔 Қазір қоймада жоқ"
 
     return ctx.reply(
-        `📦 *${escapeMarkdown(p.name)}*\n\n` +
+        `📦 <b>${escapeHtml(p.name)}</b>\n\n` +
         `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸\n` +
         `${status}`,
         {
-            parse_mode: "Markdown",
+            parse_mode: "HTML",
             ...Markup.inlineKeyboard([[Markup.button.callback("📂 Санаттар тізімі", "showcategories")]])
         }
     )
@@ -526,7 +547,7 @@ async function replyWithProduct(ctx, p) {
 function formatProductLine(p) {
     const available = Math.max(0, p.qty - (p.reservedQty || 0))
     const status = available > 0 ? `✅ бар: ${available} ${p.unit}` : "😔 жоқ"
-    return `📦 *${escapeMarkdown(p.name)}*\n💰 ${p.price.toLocaleString("ru-RU")} ₸ · ${status}`
+    return `📦 <b>${escapeHtml(p.name)}</b>\n💰 ${p.price.toLocaleString("ru-RU")} ₸ · ${status}`
 }
 
 // Обрабатывает запрос каталога: если в сообщении упомянута конкретная
@@ -575,3 +596,11 @@ async function launchWithRetry(retryDelayMs = 10000) {
 }
 
 launchWithRetry()
+
+// ============================================================
+// GRACEFUL SHUTDOWN — см. подробный комментарий в order-bot/index.js.
+// Releasing the polling connection immediately on SIGTERM avoids the
+// brief "409 Conflict" window that otherwise appears on every deploy.
+// ============================================================
+process.once("SIGINT", () => bot.stop("SIGINT"))
+process.once("SIGTERM", () => bot.stop("SIGTERM"))
