@@ -495,13 +495,21 @@ bot.on("text", async (ctx) => {
         return ctx.reply("⚠️ Сұрауды өңдеу мүмкін болмады, қайталап көріңіз.")
     }
 })
+// Названия товаров иногда сами содержат символы, которые Telegram
+// воспринимает как разметку (* для жирного, _ для курсива и т.д.) —
+// например размеры гипсокартона "2500*1200*9,5мм". Без экранирования
+// наши СОБСТВЕННЫЕ звёздочки для жирного шрифта смешиваются со звёздочками
+// внутри названия, и Telegram "съедает" часть из них при разборе разметки.
+function escapeMarkdown(text) {
+    return String(text || "").replace(/([_*`\[])/g, "\\$1")
+}
 
 async function replyWithProduct(ctx, p) {
     const available = Math.max(0, p.qty - (p.reservedQty || 0))
     const status = available > 0 ? `✅ Қоймада бар: ${available} ${p.unit}` : "😔 Қазір қоймада жоқ"
 
     return ctx.reply(
-        `📦 *${p.name}*\n\n` +
+        `📦 *${escapeMarkdown(p.name)}*\n\n` +
         `💰 Бағасы: ${p.price.toLocaleString("ru-RU")} ₸\n` +
         `${status}`,
         {
@@ -518,7 +526,7 @@ async function replyWithProduct(ctx, p) {
 function formatProductLine(p) {
     const available = Math.max(0, p.qty - (p.reservedQty || 0))
     const status = available > 0 ? `✅ бар: ${available} ${p.unit}` : "😔 жоқ"
-    return `📦 *${p.name}*\n💰 ${p.price.toLocaleString("ru-RU")} ₸ · ${status}`
+    return `📦 *${escapeMarkdown(p.name)}*\n💰 ${p.price.toLocaleString("ru-RU")} ₸ · ${status}`
 }
 
 // Обрабатывает запрос каталога: если в сообщении упомянута конкретная
