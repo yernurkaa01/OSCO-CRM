@@ -61,7 +61,7 @@ app.use(express.static(path.join(__dirname, "public")))
 // ============================================================
 
 app.use(session({
-secret: "osco_super_secret_key",
+secret: process.env.SESSION_SECRET,
 resave: false,
 saveUninitialized: false,
 
@@ -121,7 +121,7 @@ apiKey: process.env.OPENAI_API_KEY
 // MONGODB
 // ============================================================
 
-console.log("SERVER URI:", process.env.MONGO_URI)
+
 mongoose.connect(process.env.MONGO_URI)
     .then(() => {
 console.log("✅ MongoDB подключен")
