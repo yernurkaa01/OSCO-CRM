@@ -12,7 +12,6 @@ import {
     STOCK_STATUS
 } from "./services/stockCheck.js"
 
-console.log("SERVER URI:", process.env.MONGO_URI)
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log("MongoDB подключен"))
     .catch(err => console.log(err))
@@ -25,21 +24,19 @@ process.on("unhandledRejection", (err) => {
     console.error("⚠️ Необработанная ошибка (процесс продолжает работу):", err)
 })
 
+// Ловим ошибки внутри самих обработчиков Telegraf (bot.on/bot.hears и т.д.),
+// чтобы одно упавшее сообщение не роняло весь polling-цикл бота для ВСЕХ клиентов сразу.
+bot.catch((err, ctx) => {
+    console.error(`Bot.js: ошибка при обработке сообщения от ${ctx.from?.id}:`, err)
+    ctx.reply("⚠️ Кешіріңіз, қате шықты. Қайталап жазып көріңіз.").catch(() => {})
+})
+
 const CHECKS_CHAT_ID = "-5164072787"
 
 // Сколько времени даём клиенту на оплату и отправку чека после того, как
 // он подтвердил заказ (и товар был реально зарезервирован).
 const RESERVATION_TIMEOUT_MS = 10 * 60 * 1000 // 10 минут
 
-// ============================================================
-// Товары, которые продаются ВЕСОМ/ОБЪЁМОМ, а не поштучно — для них
-// разрешаем дробное количество и понимаем "100г", "0.5кг", "полкило".
-// Единица хранится в базе как есть (например "кг") — мы НЕ переводим
-// склад в граммы, только конвертируем ВВОД клиента в ту же единицу,
-// в которой товар и так хранится. Иначе "Общий остаток" на складе
-// превратится в бессмысленную кашу из смешанных единиц (кг + граммы
-// + штуки в одной сумме).
-// ============================================================
 const FRACTIONAL_UNITS = ["кг", "kg", "л", "литр", "литра", "литров", "м", "м2", "м²", "м3", "м³"]
 const WEIGHT_UNITS = ["кг", "kg"]
 
@@ -51,48 +48,35 @@ function isWeightUnit(unit) {
     return WEIGHT_UNITS.includes(String(unit || "").trim().toLowerCase())
 }
 
-// Округляем до 2 знаков после запятой, чтобы избежать "мусора" от
-// плавающей точки (0.1 + 0.2 и т.п.), сохраняя точность до сотых.
 function roundQty(n) {
     return Math.round(n * 100) / 100
 }
 
-// Разбирает ввод количества клиента с учётом единицы измерения товара.
-// Возвращает число (в той же единице, что и unit) или null, если не удалось
-// распознать / формат не подходит для этого товара (например, дробное
-// количество для штучного товара).
 function parseQuantity(rawText, unit) {
     const text = rawText.trim().toLowerCase().replace(",", ".")
     const fractional = isFractionalUnit(unit)
     const weight = isWeightUnit(unit)
 
-    // "пол кило" / "полкило" / "пол кг" — 0.5 (только для весовых товаров)
     if (weight && /^(пол\s?кило|полкило|пол\s?кг|половина\s?кг|половина\s?кило)$/.test(text)) {
         return 0.5
     }
-    // "четверть кило" / "четверть кг" — 0.25
     if (weight && /^(четверть\s?кило|четверть\s?кг)$/.test(text)) {
         return 0.25
     }
 
-    // число + "г"/"гр"/"грамм..." — переводим граммы в кг (только для весовых товаров)
     const gramsMatch = text.match(/^(\d+(?:\.\d+)?)\s*(г|гр|грамм|грамма|граммов)\.?$/)
     if (gramsMatch) {
-        if (!weight) return null // граммы бессмысленны для товара не в кг
+        if (!weight) return null
         return roundQty(Number(gramsMatch[1]) / 1000)
     }
 
-    // число + "кг"/"килограмм..." — суффикс избыточен, просто берём число
     const kgMatch = text.match(/^(\d+(?:\.\d+)?)\s*(кг|килограмм|килограмма|килограммов)\.?$/)
     if (kgMatch) {
         return roundQty(Number(kgMatch[1]))
     }
 
-    // просто число (точка или запятая как разделитель)
     if (/^\d+(?:\.\d+)?$/.test(text)) {
         const value = roundQty(Number(text))
-        // Дробное число для штучного товара (шт, мешок и т.д.) не разрешаем —
-        // там дробей физически не бывает.
         if (!Number.isInteger(value) && !fractional) return null
         return value
     }
@@ -110,7 +94,6 @@ bot.command("id", (ctx) => {
 
 const userData = {}
 
-// Возвращает существующую сессию пользователя или создаёт новую с пустой корзиной.
 function getOrCreateUser(id) {
     if (!userData[id]) {
         userData[id] = { cart: [] }
@@ -144,9 +127,6 @@ async function mainMenuKeyboard(user) {
         rows.push(names.slice(i, i + 2))
     }
 
-    // Если в корзине уже есть товары — даём возможность в любой момент
-    // перейти к оформлению, не заставляя обязательно выбирать ещё один
-    // товар (например, если нужной категории/товара сейчас нет).
     if (user && user.cart && user.cart.length > 0) {
         rows.push(["✅ Оформить заказ"])
     }
@@ -207,15 +187,11 @@ async function handleCategorySelected(ctx, user, categoryName) {
     }
 }
 
-// Форматирует всю корзину: список товаров + общая сумма
 function formatCartSummary(user) {
     let text = "🛒 *Ваша корзина:*\n\n"
     let total = 0
 
     user.cart.forEach((item, i) => {
-        // Math.round — сумма в тенге всегда целая, но при умножении дробного
-        // веса на цену (например 0.5 * 400) плавающая точка иногда даёт
-        // "199.99999999999997" вместо 200 — округляем, чтобы это не вылезало.
         const sum = Math.round(item.count * item.price)
         total += sum
         text += `${i + 1}. ${item.product} — ${item.count} ${item.unit} = ${sum.toLocaleString("ru-RU")} ₸\n`
@@ -225,8 +201,6 @@ function formatCartSummary(user) {
     return text
 }
 
-// Кладёт текущий выбранный товар в корзину (БЕЗ резервирования — это
-// просто сборка списка, резерв случится позже, при финальном подтверждении).
 async function addToCartAndAskMore(ctx, user) {
     user.cart.push({
         product: user.product,
@@ -279,9 +253,6 @@ async function handleStockCheck(ctx, user, requestedQty) {
     }
 
     if (stock.status === STOCK_STATUS.NOT_FOUND || stock.status === STOCK_STATUS.OUT_OF_STOCK) {
-        // Важно: сбрасываем текущий выбор товара и шаг — иначе бот
-        // "застревал" на шаге ввода количества и не понимал следующее
-        // сообщение клиента (например, новый выбор категории).
         delete user.product
         delete user.price
         delete user.unit
@@ -324,13 +295,6 @@ async function handleStockCheck(ctx, user, requestedQty) {
     return addToCartAndAskMore(ctx, user)
 }
 
-/**
- * Пытается атомарно зарезервировать ВСЕ товары корзины разом.
- * Если что-то не удалось — откатывает (освобождает) те позиции, которые
- * уже успели зарезервироваться в этой попытке, и возвращает информацию
- * о том, какой именно товар подвёл.
- * @returns {Promise<{success: boolean, failedItem?: object}>}
- */
 async function reserveCart(cart) {
     const reserved = []
 
@@ -338,7 +302,6 @@ async function reserveCart(cart) {
         const ok = await reserveStock(item.product, item.count)
 
         if (!ok) {
-            // Откатываем всё, что успели зарезервировать в этой попытке
             for (const done of reserved) {
                 await releaseStock(done.product, done.count)
             }
@@ -388,7 +351,6 @@ bot.on("document", async (ctx) => {
         return ctx.reply("Сначала оформите заказ и после оплаты отправьте чек.")
     }
 
-    // Проверяем, не истёк ли таймаут ожидания оплаты
     if (!user.reservationExpiresAt || Date.now() > user.reservationExpiresAt) {
         delete userData[id]
         return ctx.reply(
@@ -429,8 +391,6 @@ ${itemsList}
             }
         )
 
-        // Обновляем уже существующие (зарезервированные) заказы —
-        // не создаём новые, они были созданы в момент подтверждения корзины.
         await Order.updateMany(
             { orderCode: user.orderCode, telegramId: id, status: "резерв" },
             {
@@ -516,11 +476,7 @@ bot.on("text", async (ctx) => {
     const id = ctx.from.id
     const user = userData[id]
 
-    // ---- Мы "в меню" — нет активной сессии, либо шаг сброшен (null) ----
     if (!user || !user.step) {
-        // Аварийный выход: если в корзине уже есть товары, клиент может
-        // в любой момент перейти к оформлению, не выбирая ещё один товар
-        // (например, если нужной категории сейчас нет в наличии).
         if (user && user.cart && user.cart.length > 0 && text === "✅ Оформить заказ") {
             return proceedToOrderConfirm(ctx, user)
         }
@@ -536,10 +492,6 @@ bot.on("text", async (ctx) => {
         return ctx.reply("Выберите товар:", await mainMenuKeyboard(user))
     }
 
-    // ---- Проверка истечения резерва — на ЛЮБОМ шаге после подтверждения
-    // корзины (имя, телефон, банк, чек). Если время вышло, фоновая задача
-    // уже освободила резерв в базе — сообщаем клиенту и сбрасываем сессию,
-    // чтобы бот не продолжал вести его дальше по "мёртвому" заказу.
     const STEPS_AFTER_RESERVATION = ["name", "phone_choice", "phone_manual", "bank_choice", "check"]
 
     if (STEPS_AFTER_RESERVATION.includes(user.step) && user.reservationExpiresAt && Date.now() > user.reservationExpiresAt) {
@@ -551,7 +503,6 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    // ---- выбор товара кнопкой ----
     if (user.step === "product_select_button") {
         const match = text.match(/^(.+) - [\d\s]+ тг$/)
 
@@ -586,7 +537,6 @@ bot.on("text", async (ctx) => {
         return ctx.reply(`Сколько нужно "${product.name}"?${hint}`, Markup.removeKeyboard())
     }
 
-    // ---- выбор товара по коду ----
     if (user.step === "product_select_code") {
         const code = text.toUpperCase()
 
@@ -618,7 +568,6 @@ bot.on("text", async (ctx) => {
         return ctx.reply(`Сколько нужно "${product.name}"?${hint}`)
     }
 
-    // ---- количество (информационная проверка, БЕЗ резервирования) ----
     if (user.step === "count") {
         const count = parseQuantity(text, user.unit)
 
@@ -639,7 +588,6 @@ bot.on("text", async (ctx) => {
         }
     }
 
-    // ---- частичное наличие ----
     if (user.step === "partial_confirm") {
         const yes = ["✅ да, оформить", "да, оформить", "да"].includes(text.toLowerCase())
         const no = ["❌ нет, отменить", "нет, отменить", "нет"].includes(text.toLowerCase())
@@ -679,7 +627,6 @@ bot.on("text", async (ctx) => {
         return ctx.reply("Нажмите «✅ Да, оформить» или «❌ Нет, отменить»")
     }
 
-    // ---- добавить ещё товар? ----
     if (user.step === "add_more") {
         if (text.toLowerCase() === "да") {
             user.step = null
@@ -696,7 +643,6 @@ bot.on("text", async (ctx) => {
         )
     }
 
-    // ---- подтверждение всего заказа — ЗДЕСЬ ПРОИСХОДИТ РЕАЛЬНЫЙ РЕЗЕРВ ----
     if (user.step === "confirm") {
         if (text.toLowerCase() === "да") {
             const reserveResult = await reserveCart(user.cart)
@@ -704,7 +650,6 @@ bot.on("text", async (ctx) => {
             if (!reserveResult.success) {
                 const failedName = reserveResult.failedItem.product
 
-                // Убираем не получившийся товар из корзины
                 user.cart = user.cart.filter(item => item.product !== failedName)
 
                 await ctx.reply(
@@ -723,7 +668,6 @@ bot.on("text", async (ctx) => {
                 )
             }
 
-            // Резерв успешен — создаём заказы в базе со статусом "резерв"
             const orderCode = generateOrderCode()
             user.orderCode = orderCode
             user.reservationExpiresAt = Date.now() + RESERVATION_TIMEOUT_MS
@@ -759,7 +703,6 @@ bot.on("text", async (ctx) => {
         return ctx.reply("Нажмите 'Да' или 'Нет'")
     }
 
-    // ---- имя ----
     if (user.step === "name") {
         if (!/^[а-яА-ЯёЁa-zA-ZқҚөӨһҺәӘіІңҢғҒүҮұҰ\s\-]{2,}$/.test(text)) {
             return ctx.reply("❌ Введите корректное имя (только буквы)")
@@ -779,7 +722,6 @@ bot.on("text", async (ctx) => {
 )
     }
 
-    // ---- выбор банка ----
     if (user.step === "bank_choice") {
         if (text !== "Kaspi Bank" && text !== "Halyk Bank") {
             return ctx.reply(
@@ -791,10 +733,6 @@ bot.on("text", async (ctx) => {
         user.bank = text
         user.step = "check"
 
-        // ⚠️ Критично: уведомляем менеджера ПРЯМО СЕЙЧАС, а не после того
-        // как клиент пришлёт чек. Иначе бот обещает клиенту "выставим счёт
-        // в течение минуты", а по факту никто не знает, что нужно вручную
-        // отправить платёжный запрос в Kaspi/Halyk на его номер телефона.
         const cartList = user.cart
             .map(item => `${item.product} — ${item.count} ${item.unit}`)
             .join("\n")
@@ -826,7 +764,6 @@ bot.on("text", async (ctx) => {
         return ctx.reply(bankMessage, Markup.removeKeyboard())
     }
 
-    // ---- телефон вручную ----
     if (user.step === "phone_manual") {
         const validPhone = validatePhone(text)
 
@@ -861,9 +798,6 @@ bot.on("text", async (ctx) => {
 
 // ============================================================
 // ФОНОВАЯ ОЧИСТКА ПРОСРОЧЕННЫХ РЕЗЕРВОВ
-// Раз в минуту ищем заказы в статусе "резерв", которые висят дольше
-// таймаута (клиент не успел оплатить), освобождаем резерв на складе
-// и помечаем заказ как отменённый по таймауту.
 // ============================================================
 async function releaseExpiredReservations() {
     try {
@@ -874,8 +808,6 @@ async function releaseExpiredReservations() {
             createdAt: { $lt: expiredBefore }
         })
 
-        // Группируем по (telegramId + orderCode), чтобы отправить клиенту
-        // ОДНО уведомление на весь заказ, а не по одному на каждый товар в корзине.
         const groups = new Map()
 
         for (const order of expired) {
@@ -889,9 +821,6 @@ async function releaseExpiredReservations() {
             }
         }
 
-        // Проактивно уведомляем каждого клиента СРАЗУ в момент истечения,
-        // не дожидаясь, пока он сам что-то напишет (чтобы он не успел
-        // оплатить резерв, который уже снят).
         for (const { telegramId, orderCode } of groups.values()) {
             try {
                 await bot.telegram.sendMessage(
@@ -904,8 +833,6 @@ async function releaseExpiredReservations() {
                 console.log(`Не удалось уведомить клиента ${telegramId} об истечении резерва:`, e.message)
             }
 
-            // Сбрасываем сессию клиента ТОЛЬКО если он всё ещё на этом же
-            // заказе (не трогаем, если он уже начал новый заказ заново)
             const session = userData[telegramId]
             if (session && session.orderCode === orderCode) {
                 delete userData[telegramId]
@@ -920,10 +847,6 @@ setInterval(releaseExpiredReservations, 60 * 1000)
 
 // ============================================================
 // ЗАПУСК БОТА С АВТОМАТИЧЕСКИМИ ПОВТОРНЫМИ ПОПЫТКАМИ
-// Если подключение к Telegram временно недоступно (сетевой сбой,
-// ETIMEDOUT и т.п.) — не роняем процесс насовсем, а пробуем снова
-// через паузу. Раньше bot.launch() падал один раз и бот оставался
-// мёртвым до следующего ручного деплоя.
 // ============================================================
 async function launchBotWithRetry(retryDelayMs = 10000) {
     try {
@@ -936,3 +859,14 @@ async function launchBotWithRetry(retryDelayMs = 10000) {
 }
 
 launchBotWithRetry()
+
+// ============================================================
+// ГРАЦЕФУЛ-ШАТДАУН
+// Без этого блока при каждом деплое/рестарте Render старый процесс
+// не успевает сказать Telegram "я закончил polling" — и Telegram ещё
+// какое-то время считает, что бот занят старым соединением, из-за чего
+// новый процесс получает 409 Conflict на bot.launch(). Эти два обработчика
+// корректно останавливают polling ДО того как процесс убьют.
+// ============================================================
+process.once("SIGINT", () => bot.stop("SIGINT"))
+process.once("SIGTERM", () => bot.stop("SIGTERM"))
