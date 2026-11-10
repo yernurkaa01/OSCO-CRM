@@ -9,13 +9,11 @@ import mongoose from "mongoose"
 import cors from "cors"
 import path from "path"
 import session from "express-session"
-import OpenAI from "openai"
 import fetch from "node-fetch"
 import bcrypt from "bcryptjs"
 import { fileURLToPath } from "url"
 
 import Order from "./models/Order.js"
-import Client from "./models/Client.js"
 import Log from "./models/Log.js"
 import User from "./models/User.js"
 import clientsRouter from "./routes/clients.js"
@@ -108,13 +106,6 @@ res.redirect("/login")
 })
 
 
-// ============================================================
-// OPENAI
-// ============================================================
-
-const openai = new OpenAI({
-apiKey: process.env.OPENAI_API_KEY
-})
 
 
 // ============================================================
@@ -924,55 +915,6 @@ res.json(logs)
 app.use("/clients", checkAuth, clientsRouter)
 
 
-// ============================================================
-// SAVE CLIENT
-// ============================================================
-
-app.post("/save-client", async (req, res) => {
-
-try {
-
-const {
-name,
-phone,
-username,
-telegramId
-        } = req.body
-
-await Client.findOneAndUpdate(
-
-            { phone },
-
-            {
-name,
-phone,
-username,
-telegramId
-            },
-
-            {
-upsert: true,
-returnDocument: "after"
-            }
-
-        )
-
-res.json({
-success: true
-        })
-
-    } catch (err) {
-
-console.error(err)
-
-res.status(500).json({
-error: "Ошибка сохранения клиента"
-        })
-
-    }
-
-})
-
 
 // ============================================================
 // ADMIN PAGE
@@ -1178,52 +1120,6 @@ app.use("/admin", checkAuth, ownerOnly, sellerSalesApiRouter)
 
 app.use("/", employeeSalesRouter)
 
-
-// ============================================================
-// AI
-// ============================================================
-
-app.post("/ai", checkAuth, async (req, res) => {
-
-try {
-
-const { message } = req.body
-
-const ai = await openai.chat.completions.create({
-
-model: "gpt-4.1-mini",
-
-messages: [
-
-                {
-role: "system",
-content: "Ты менеджер магазина стройматериалов. Отвечай кратко и по делу."
-                },
-
-                {
-role: "user",
-content: message
-                }
-
-            ]
-
-        })
-
-res.json({
-reply: ai.choices[0].message.content
-        })
-
-    } catch (err) {
-
-console.error("AI ERROR:", err)
-
-res.status(500).json({
-error: "Ошибка AI"
-        })
-
-    }
-
-})
 
 
 // ============================================================
